@@ -276,6 +276,23 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	/* Receive SIGWINCH notifications through a file descriptor */
+	
+	if(pipe(winchpipe)) {
+		fprintf(stderr, "%s: pipe() failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	
+	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
+		fprintf(stderr, "%s: signal() failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	
+	if(write(winchpipe[1], "", 1) <= 0){
+		fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+					
 	/* Set up terminal on the client */
 	
 	oldtios = tios;
@@ -297,23 +314,6 @@ int main(int argc, char **argv) {
 
 	tcsetattr(0, TCSADRAIN, &tios);
 
-	/* Receive SIGWINCH notifications through a file descriptor */
-	
-	if(pipe(winchpipe)) {
-		fprintf(stderr, "%s: pipe() failed: %s\n", argv[0], strerror(errno));
-		return 1;
-	}
-	
-	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
-		fprintf(stderr, "%s: signal() failed: %s\n", argv[0], strerror(errno));
-		return 1;
-	}
-	
-	if(write(winchpipe[1], "", 1) <= 0){
-		fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
-		return 1;
-	}
-					
 	/* Process input/output */
 	
 	pfd[0].fd = 0;
@@ -377,10 +377,8 @@ int main(int argc, char **argv) {
 
 	tcsetattr(0, TCSADRAIN, &oldtios);
 
-	if(errno) {
+	if(errno)
 		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
-		return 1;
-	}
 	
 	return 0;
 }
