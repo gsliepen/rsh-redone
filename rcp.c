@@ -53,6 +53,30 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 	return written;
 }
 
+int safewritev(int fd, struct iovec *v, size_t count) {
+	size_t r, e;
+
+	while(count > 0) {
+		r = writev(fd, v, count);
+		if(r == -1)
+			return -1;
+
+		for(;;) {
+			e = v->iov_len;
+			if(r < e)
+				break;
+			r -= e;
+			v++;
+			if(!--count)
+				return 0;
+		}
+
+		v->iov_len = e - r;
+		v->iov_base += r;
+	}
+	return 0;
+}
+
 ssize_t saferead(int fd, void *buf, size_t count) {
 	int written = 0, result;
 	
@@ -118,6 +142,25 @@ static ssize_t ringread(ring_t *ring, int fd) {
 	return r;
 }
 
+/* safewrite for rings */
+static ssize_t ringwrite(ring_t *ring, int fd, size_t count) {
+	struct iovec io[2];
+	size_t part;
+
+	if(count > ring->fill)
+		count = ring->fill;
+
+	if(ring->off + count < ring->len)
+		return safewrite(fd, ring->buf + ring->off, count);
+
+	io[0].iov_base = ring->buf + ring->off;
+	io[0].iov_len = part = ring->len - ring->off;
+	io[1].iov_base = ring->buf;
+	io[1].iov_len = count - part;
+
+	return safewritev(fd, io, 2);
+}
+
 static void *ringchr(ring_t *ring, int c, size_t extra) {
 	off_t off = ring->off;
 	size_t fill = ring->fill;
@@ -147,6 +190,34 @@ static ssize_t ringdist(ring_t *ring, unsigned char *s) {
 	if(r < 0)
 		r += ring->len;
 	return r;
+}
+
+#define MAXMMAP (1<<22)
+
+static ssize_t mmapcopy(int fd, ssize_t written, ssize_t size) {
+	ssize_t r, length, chunk;
+	off_t start, skip;
+	void *m;
+	static int pagesize = 0;
+
+	if(!pagesize)
+		pagesize = getpagesize();
+
+	while(written < size) {
+		start = written / pagesize * pagesize;
+		length = size - start;
+		if(length > MAXMMAP)
+			length = MAXMMAP;
+		skip = written - start;
+		chunk = length - skip;
+		m = mmap(NULL, length, PROT_WRITE, MAP_SHARED, fd, start);
+		if(m == MAP_FAILED)
+			return -1;
+		saferead(fd, m + skip, chunk);
+		if(munmap(m, length) == -1)
+			return -1;
+		written += chunk;
+	}
 }
 
 #if 0
@@ -434,7 +505,7 @@ int to(char *dname, int preserve, int dir) {
 	unsigned char buf[65536];
 	char path[4096];
 	ssize_t size, r, offs, part, slash[128];
-	int flags, mode, i, level;
+	int flags, mode, i, level, fd;
 	unsigned char cmd, c, *s;
 	struct stat st;
 	struct ring_t ring;
@@ -464,12 +535,12 @@ int to(char *dname, int preserve, int dir) {
 				if(ring.len < 2) {
 					r = ringread(&ring, STDIN_FILENO);
 					if(!r)
-						errno = EINVAL;
+						errno = ENODATA;
 					if(r <= 0)
 						return -1;
 				}
 				if(ring.buf[ring.off])
-					return errno = EINVAL, -1;
+					return errno = EPROTO, -1;
 				safewrite(STDOUT_FILENO, "", 1);
 				if(!level)
 					return 0;
@@ -488,7 +559,7 @@ int to(char *dname, int preserve, int dir) {
 						ring.off = 0;
 					c = ring.buf[ring.off];
 					if(c < '0' || c > '7')
-						return errno = EINVAL, -1;
+						return errno = EPROTO, -1;
 					mode = mode << 3 | c - '0';
 				}
 
@@ -506,7 +577,7 @@ int to(char *dname, int preserve, int dir) {
 					if(s)
 						break;
 					offs = ring.fill;
-					if(offs > 19)
+					if(offs > EOVERFLOW)
 						return errno = EINVAL, -1;
 					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
@@ -514,8 +585,10 @@ int to(char *dname, int preserve, int dir) {
 				}
 
 				r = ringdist(&ring, s) + 1;
-				if(r == 1 || r > 19)
-						return errno = EINVAL, -1;
+				if(r == 1)
+					return errno = EPROTO, -1;
+				if(r > 19)
+					return errno = EOVERFLOW, -1;
 
 				size = 0;
 				for(;;) {
@@ -523,7 +596,7 @@ int to(char *dname, int preserve, int dir) {
 					if(c == ' ')
 						break;
 					if(c < '0' || c > '9')
-						return errno = EINVAL, -1;
+						return errno = EPROTO, -1;
 					size = size * 10 + c - '0';
 					if(++ring.off > ring.len)
 						ring.off = 0;
@@ -539,7 +612,7 @@ int to(char *dname, int preserve, int dir) {
 						break;
 					offs = ring.fill;
 					if(offs == ring.len)
-						return errno = EINVAL, -1;
+						return errno = ENOBUFS, -1;
 					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
 						return -1;
@@ -548,7 +621,7 @@ int to(char *dname, int preserve, int dir) {
 				r = ringdist(&ring, s) + 1;
 				slash[level + 1] = slash[level] + r;
 				if(slash[level + 1] + 1 >= sizeof path)
-					return errno = EINVAL, -1;
+					return errno = ENAMETOOLONG, -1;
 				path[slash[level]] = '/';
 
 				offs = ring.off + r - ring.len;
@@ -576,10 +649,21 @@ int to(char *dname, int preserve, int dir) {
 					level++;
 				} else {
 					/* write file */
-				
-				
+					fd = open(path, O_WRONLY|O_CREAT, mode);
+					if(fd == -1 || ftruncate(fd, size) == -1)
+						return -1;
+					r = ringwrite(&ring, fd, size);
+					if(r == -1)
+						return -1;
+					if(r < size && mmapcopy(fd, r, size) == -1)
+						return -1;
+					if(close(fd) == -1)
+						return -1;
 					path[slash[level]] = '\0';
 				}
+				break;
+			default:
+				return EPROTO, -1;
 		}
 	}
 }
