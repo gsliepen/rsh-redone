@@ -356,8 +356,8 @@ int main(int argc, char **argv) {
 					break;
 				if(safewrite(1, buf, len) <= 0)
 					break;
-				pfd[1].revents = 0;
 			}
+			pfd[1].revents = 0;
 		}
 
 		/* If we got a SIGWINCH, send new window size to server */
