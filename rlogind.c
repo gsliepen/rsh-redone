@@ -382,9 +382,11 @@ int main(int argc, char **argv) {
 		
 		int on = 1;
 		close(slave);
+		/* WTF doet dit?
 		ioctl(0, FIONBIO, &on);
 		ioctl(master, FIONBIO, &on);
 		ioctl(master, TIOCPKT, &on);
+		*/
 
 		/* Process input/output */
 
@@ -419,13 +421,14 @@ int main(int argc, char **argv) {
 						winsize.ws_col = ntohs(winbuf[1]);
 						winsize.ws_xpixel = ntohs(winbuf[2]);
 						winsize.ws_ypixel = ntohs(winbuf[3]);
-						if(ioctl(master, TIOCSWINSZ, &winsize))
+						if(ioctl(master, TIOCSWINSZ, &winsize) == -1)
 							break;
 						memcpy(buf + i - 4, buf + i + 8, len - i - 8);
 						i -= 4;
 						len -= 12;
 					}
 				}
+				
 				if(safewrite(master, buf, len) == -1)
 					break;
 				pfd[0].revents = 0;
