@@ -35,6 +35,7 @@
 #include <pty.h>
 #include <utmp.h>
 #include <grp.h>
+#include <paths.h>
 
 char *argv0;
 
@@ -343,6 +344,8 @@ int main(int argc, char **argv) {
 	snprintf(env, sizeof(env), "USER=%s", pamuser);
 	pam_putenv(handle, env);
 	snprintf(env, sizeof(env), "SHELL=%s", pw->pw_shell);
+	pam_putenv(handle, env);
+	snprintf(env, sizeof(env), "PATH=%s", _PATH_DEFPATH);
 	pam_putenv(handle, env);
 	
 	/* Run command */
