@@ -5,10 +5,12 @@
 .Nd remote shell
 .Sh SYNOPSIS
 .Nm
+.Op Fl 46
 .Op Fl l Ar user
 .Op Fl p Ar port
+.Op Ar user Ns Li @ Ns
 .Ar host
-.Op command
+.Ar command
 .Sh DESCRIPTION
 .Nm
 makes a connection to the remote shell daemon running on
@@ -22,8 +24,12 @@ output on the remote machine is sent back to the
 client on the local machine.
 .Sh OPTIONS
 .Bl -tag -width flag
+.It Fl 4
+Use only IPv4 to connect to the remote host.
+.It Fl 6
+Use only IPv6 to connect to the remote host.
 .It Fl l Ar user
-Connect to the remote machine as a different user than on the local machine.
+Connect to the remote host as a different user than on the local machine.
 .It Fl p Ar port
 Connect to a different port than the default one for
 .Nm .

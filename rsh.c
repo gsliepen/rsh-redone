@@ -32,7 +32,7 @@
 char *argv0;
 
 void usage(void) {
-	fprintf(stderr, "Usage: %s [-l user] [-p port] host command...\n", argv0);
+	fprintf(stderr, "Usage: %s [-46] [-l user] [-p port] [user@]host command...\n", argv0);
 }
 
 /* Make sure everything gets written */
@@ -57,6 +57,7 @@ int main(int argc, char **argv) {
 	char *luser = NULL;
 	char *host = NULL;
 	char *port = "shell";
+	char *p;
 	char lport[5];
 	
 	struct passwd *pw;
@@ -120,6 +121,12 @@ int main(int argc, char **argv) {
 	}
 	
 	host = argv[optind++];
+	
+	if((p = strchr(host, '@'))) {
+		user = host;
+		*p = '\0';
+		host = p + 1;
+	}
 	
 	/* Resolve hostname and try to make a connection */
 	
@@ -236,26 +243,20 @@ int main(int argc, char **argv) {
 	
 	/* Send required information to the server */
 	
-	if(safewrite(sock, lport, strlen(lport) + 1) == -1 || 
-	   safewrite(sock, luser, strlen(luser) + 1) == -1 ||
-	   safewrite(sock, user, strlen(user) + 1) == -1) {
-		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
-		return 1;
-	}
+	bufp[0] = buf[0];
+	*bufp[0]++ = '\0';
+	strcpy(bufp[0], lport); bufp[0] += strlen(lport) + 1;
+	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
+	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
 
 	for(; optind < argc; optind++) {
-		if(safewrite(sock, argv[optind], strlen(argv[optind])) == -1) {
-			fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
-			return 1;
-		}
+		strcpy(bufp[0], argv[optind]); bufp[0] += strlen(argv[optind]);
 		if(optind < argc - 1)
-			if(safewrite(sock, " ", 1) == -1) {
-				fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
-				return 1;
-			}
+			*bufp[0]++ = ' ';
 	}
-
-	if(safewrite(sock, "", 1) == -1) {
+	*bufp[0]++ = '0';
+	
+	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 		return 1;
 	}

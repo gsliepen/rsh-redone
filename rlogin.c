@@ -37,7 +37,7 @@
 char *argv0;
 
 void usage(void) {
-	fprintf(stderr, "Usage: rlogin [-l user] [-p port] host\n");
+	fprintf(stderr, "Usage: rlogin [-46] [-l user] [-p port] [user@]host\n");
 }
 
 /* Make sure everything gets written */
@@ -105,6 +105,7 @@ int main(int argc, char **argv) {
 	char *luser = NULL;
 	char *host = NULL;
 	char *port = "login";
+	char *p;
 	char lport[5];
 	
 	struct passwd *pw;
@@ -174,10 +175,10 @@ int main(int argc, char **argv) {
 	
 	host = argv[optind++];
 	
-	if(optind != argc) {
-		fprintf(stderr, "%s: Too many arguments!\n", argv0);
-		usage();
-		return 1;
+;	if((p = strchr(host, '@'))) {
+		user = host;
+		*p = '\0';
+		host = p + 1;
 	}
 	
 	/* Resolve hostname and try to make a connection */
@@ -267,12 +268,20 @@ int main(int argc, char **argv) {
 	
 	speed = termspeed(cfgetispeed(&tios));
 	
-	if(safewrite(sock, "", 1) == -1 || 
-	   safewrite(sock, luser, strlen(luser) + 1) == -1 ||
-	   safewrite(sock, user, strlen(user) + 1) == -1 ||
-	   safewrite(sock, term, strlen(term)) == -1 ||
-	   safewrite(sock, "/", 1) == -1 ||
-	   safewrite(sock, speed, strlen(speed) + 1) == -1) {
+	bufp[0] = buf[0];
+	*bufp[0]++ = '\0';
+	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
+	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
+	strcpy(bufp[0], term); bufp[0] += strlen(term);
+	*bufp[0]++ = '/';
+	strcpy(bufp[0], speed); bufp[0] += strlen(speed);
+	for(; optind < argc; optind++) {
+		*bufp[0]++ = ' ';
+		strcpy(bufp[0], argv[optind]); bufp[0] += strlen(argv[optind]);
+	}
+	*bufp[0]++ = '\0';
+	
+	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 		return 1;
 	}
