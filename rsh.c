@@ -25,8 +25,9 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
-#define BUFLEN 0x10000
+#define BUFLEN 0x20000
 
 char *argv0;
 
@@ -75,6 +76,8 @@ int main(int argc, char **argv) {
 	
 	fd_set infd, outfd, infdset, outfdset, errfd;
 	int maxfd;
+	
+	int flags;
 	
 	argv0 = argv[0];
 	
@@ -270,6 +273,11 @@ int main(int argc, char **argv) {
 	
 	/* Process input/output */
 
+	flags = fcntl(sock, F_GETFL);
+	fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+	flags = fcntl(esock, F_GETFL);
+	fcntl(esock, F_SETFL, flags | O_NONBLOCK);
+	
 	bufp[0] = buf[0];
 	bufp[1] = buf[1];
 	bufp[2] = buf[2];

@@ -128,6 +128,8 @@ int main(int argc, char **argv) {
 	fd_set infd, outfd, infdset, outfdset, exfd, exfdset;
 	int maxfd;
 	
+	int flags;
+	
 	int oldmask;
 	
 	argv0 = argv[0];
@@ -300,6 +302,9 @@ int main(int argc, char **argv) {
 
 	/* Process input/output */
 	
+	flags = fcntl(sock, F_GETFL);
+	fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
 	bufp[0] = buf[0];
 	bufp[1] = buf[1];
 	
