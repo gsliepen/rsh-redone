@@ -90,9 +90,12 @@ ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
 		if(result <= 0)
 			return result;
 
+		if(!*buf)
+			continue;
+		
 		len++;
 		count--;
-				
+		
 		if(*buf == '\r') {
 			if(write(outfd, "\n\r", 2) <= 0)
 				return -1;
@@ -101,8 +104,10 @@ ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
 		}
 		
 		if(echo)
-			if(write(outfd, buf++, 1) <= 0)
+			if(write(outfd, buf, 1) <= 0)
 				return -1;
+		
+		buf++;
 	}
 	
 	errno = ENOBUFS;	
@@ -170,6 +175,7 @@ int main(int argc, char **argv) {
 	struct passwd *pw;
 	
 	int err;
+	const char *errstr;
 	
 	char opt;
 
@@ -227,8 +233,8 @@ int main(int argc, char **argv) {
 
 	/* Lookup hostname */
 	
-	if(getnameinfo(peer, peerlen, host, sizeof(host), NULL, 0, 0)) {
-		syslog(LOG_ERR, "Error resolving address: %m");
+	if((err = getnameinfo(peer, peerlen, host, sizeof(host), NULL, 0, 0))) {
+		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
 		return 1;
 	}
 	
@@ -313,7 +319,10 @@ int main(int argc, char **argv) {
 	}
 	
 	if(err != PAM_SUCCESS) {
-		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
+		errstr = pam_strerror(handle, err);
+		safewrite(1, errstr, strlen(errstr));
+		safewrite(1, "\n", 1);
+		syslog(LOG_ERR, "PAM error: %s", errstr);
 		return 1;
 	}
 
@@ -322,7 +331,10 @@ int main(int argc, char **argv) {
 	err = pam_acct_mgmt(handle, 0);
 	
 	if(err != PAM_SUCCESS) {
-		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
+		errstr = pam_strerror(handle, err);
+		safewrite(1, errstr, strlen(errstr));
+		safewrite(1, "\n", 1);
+		syslog(LOG_ERR, "PAM error: %s", errstr);
 		return 1;
 	}
 
@@ -331,7 +343,10 @@ int main(int argc, char **argv) {
 	err = pam_get_item(handle, PAM_USER, &item);
 	
 	if(err != PAM_SUCCESS) {
-		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
+		errstr = pam_strerror(handle, err);
+		safewrite(1, errstr, strlen(errstr));
+		safewrite(1, "\n", 1);
+		syslog(LOG_ERR, "PAM error: %s", errstr);
 		return 1;
 	}
 	
@@ -362,7 +377,10 @@ int main(int argc, char **argv) {
 	err = pam_setcred(handle, PAM_ESTABLISH_CRED);
 	
 	if(err != PAM_SUCCESS) {
-		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
+		errstr = pam_strerror(handle, err);
+		safewrite(1, errstr, strlen(errstr));
+		safewrite(1, "\n", 1);
+		syslog(LOG_ERR, "PAM error: %s", errstr);
 		return 1;
 	}
 	
@@ -385,7 +403,6 @@ int main(int argc, char **argv) {
 	if(pid) {
 		/* Parent process, still the rlogin server */
 		
-		int on = 1;
 		close(slave);
 
 		/* Process input/output */
