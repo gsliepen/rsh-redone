@@ -120,17 +120,17 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 	int i, err;
 	char reply[1024];
 	
-	*res = malloc(sizeof(*reply) * msgc);
+	*res = malloc(sizeof *reply * msgc);
 	if(!*res)
 		return PAM_CONV_ERR;
-	memset(*res, '\0', sizeof(*reply) * msgc);
+	memset(*res, '\0', sizeof *reply * msgc);
 	
 	for(i = 0; i < msgc; i++) {
 		switch(msgv[i]->msg_style) {
 			case PAM_PROMPT_ECHO_OFF:
 				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
 					return PAM_CONV_ERR;
-				err = conv_read(0, 1, reply, sizeof(reply), 0);
+				err = conv_read(0, 1, reply, sizeof reply, 0);
 				if(err <= 0)
 					return PAM_CONV_ERR;
 				res[i]->resp = strdup(reply);
@@ -138,7 +138,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 			case PAM_PROMPT_ECHO_ON:
 				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
 					return PAM_CONV_ERR;
-				err = conv_read(0, 1, reply, sizeof(reply), 1);
+				err = conv_read(0, 1, reply, sizeof reply, 1);
 				if(err <= 0)
 					return PAM_CONV_ERR;
 				res[i]->resp = strdup(reply);
@@ -166,7 +166,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 int main(int argc, char **argv) {
 	struct sockaddr_storage peer_sa;
 	struct sockaddr *peer = (struct sockaddr *)&peer_sa;
-	int peerlen = sizeof(peer_sa);
+	int peerlen = sizeof peer_sa;
 	
 	char user[1024];
 	char luser[1024];
@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
 
 	/* Lookup hostname */
 	
-	if((err = getnameinfo(peer, peerlen, host, sizeof(host), NULL, 0, 0))) {
+	if((err = getnameinfo(peer, peerlen, host, sizeof host, NULL, 0, 0))) {
 		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
 		return 1;
 	}
@@ -269,12 +269,12 @@ int main(int argc, char **argv) {
 
 	/* Read usernames and terminal info */
 	
-	if(readtonull(0, user, sizeof(user)) <= 0 || readtonull(0, luser, sizeof(luser)) <= 0) {
+	if(readtonull(0, user, sizeof user) <= 0 || readtonull(0, luser, sizeof luser) <= 0) {
 		syslog(LOG_ERR, "Error while receiving usernames from %s: %m", host);
 		return 1;
 	}
 	
-	if(readtonull(0, term, sizeof(term)) <= 0) {
+	if(readtonull(0, term, sizeof term) <= 0) {
 		syslog(LOG_ERR, "Error while receiving terminal from %s: %m", host);
 		return 1;
 	}
@@ -414,7 +414,7 @@ int main(int argc, char **argv) {
 			}
 
 			if(pfd[0].revents) {
-				len = read(0, buf, sizeof(buf));
+				len = read(0, buf, sizeof buf);
 				if(len <= 0)
 					break;
 
@@ -444,7 +444,7 @@ int main(int argc, char **argv) {
 			}
 
 			if(pfd[1].revents) {
-				len = read(master, buf, sizeof(buf));
+				len = read(master, buf, sizeof buf);
 				if(len <= 0) {
 					errno = 0;
 					break;

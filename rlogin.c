@@ -208,7 +208,7 @@ int main(int argc, char **argv) {
 	
 	/* Resolve hostname and try to make a connection */
 	
-	memset(&hint, '\0', sizeof(hint));
+	memset(&hint, '\0', sizeof hint);
 	hint.ai_family = af;
 	hint.ai_socktype = SOCK_STREAM;
 	
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
 	hint.ai_flags = AI_PASSIVE;
 	
 	for(aip = ai; aip; aip = aip->ai_next) {
-		if(getnameinfo(aip->ai_addr, aip->ai_addrlen, hostaddr, sizeof(hostaddr), portnr, sizeof(portnr), NI_NUMERICHOST | NI_NUMERICSERV)) {
+		if(getnameinfo(aip->ai_addr, aip->ai_addrlen, hostaddr, sizeof hostaddr, portnr, sizeof portnr, NI_NUMERICHOST | NI_NUMERICSERV)) {
 			fprintf(stderr, "%s: Error resolving address: %s\n", argv0, strerror(errno));
 			return 1;
 		}
@@ -238,7 +238,7 @@ int main(int argc, char **argv) {
 		/* Bind to a privileged port */
 		
 		for(i = 1023; i >= 512; i--) {
-			snprintf(lport, sizeof(lport), "%d", i);
+			snprintf(lport, sizeof lport, "%d", i);
 			err = getaddrinfo(NULL, lport, &hint, &lai);
 			if(err) {
 				fprintf(stderr, " Error looking up localhost: %s\n", gai_strerror(err));
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
 	speed = termspeed(cfgetispeed(&tios));
 	
 	bufp[0] = buf[0];
-	len[0] = sizeof(buf[0]);
+	len[0] = sizeof buf[0];
 	safecpy(&bufp[0], &len[0], "", 1);
 	safecpy(&bufp[0], &len[0], luser, 1);
 	safecpy(&bufp[0], &len[0], user, 1);

@@ -75,7 +75,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 int main(int argc, char **argv) {
 	struct sockaddr_storage peer_sa;
 	struct sockaddr *peer = (struct sockaddr *)&peer_sa;
-	int peerlen = sizeof(peer_sa);
+	int peerlen = sizeof peer_sa;
 	
 	char user[1024];
 	char luser[1024];
@@ -142,12 +142,12 @@ int main(int argc, char **argv) {
 
 	/* Lookup hostname */
 	
-	if((err = getnameinfo(peer, peerlen, host, sizeof(host), NULL, 0, 0))) {
+	if((err = getnameinfo(peer, peerlen, host, sizeof host, NULL, 0, 0))) {
 		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
 		return 1;
 	}
 	
-	if((err = getnameinfo(peer, peerlen, addr, sizeof(addr), port, sizeof(port), 0))) {
+	if((err = getnameinfo(peer, peerlen, addr, sizeof addr, port, sizeof port, 0))) {
 		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
 		return 1;
 	}
@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
 	
 	/* Read port number for stderr socket */
 	
-	if(readtonull(0, eport, sizeof(eport)) <= 0) {
+	if(readtonull(0, eport, sizeof eport) <= 0) {
 		syslog(LOG_ERR, "Error while receiving stderr port number from %s: %m", host);
 		return 1;
 	}
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
 	eportnr = atoi(eport);
 	
 	if(eportnr) {
-		memset(&hint, '\0', sizeof(hint));
+		memset(&hint, '\0', sizeof hint);
 		hint.ai_socktype = SOCK_STREAM;
 		hint.ai_family = peer->sa_family;
 		
@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
 		hint.ai_flags = AI_PASSIVE;
 		
 		for(i = 1023; i >= 512; i--) {
-			snprintf(lport, sizeof(lport), "%d", i);
+			snprintf(lport, sizeof lport, "%d", i);
 			err = getaddrinfo(NULL, lport, &hint, &lai);
 			if(err || !ai) {
 				syslog(LOG_ERR, "Error looking up localhost: %s", gai_strerror(err));
@@ -228,12 +228,12 @@ int main(int argc, char **argv) {
 
 	/* Read usernames and terminal info */
 	
-	if(readtonull(0, user, sizeof(user)) <= 0 || readtonull(0, luser, sizeof(luser)) <= 0) {
+	if(readtonull(0, user, sizeof user) <= 0 || readtonull(0, luser, sizeof luser) <= 0) {
 		syslog(LOG_ERR, "Error while receiving usernames from %s: %m", host);
 		return 1;
 	}
 	
-	if(readtonull(0, command, sizeof(command)) <= 0) {
+	if(readtonull(0, command, sizeof command) <= 0) {
 		syslog(LOG_ERR, "Error while receiving command from %s: %m", host);
 		return 1;
 	}
@@ -341,11 +341,13 @@ int main(int argc, char **argv) {
 	
 	/* Set some environment variables PAM doesn't set */
 	
-	snprintf(env, sizeof(env), "USER=%s", pamuser);
+	snprintf(env, sizeof env, "USER=%s", pamuser);
 	pam_putenv(handle, env);
-	snprintf(env, sizeof(env), "SHELL=%s", pw->pw_shell);
+	snprintf(env, sizeof env, "SHELL=%s", pw->pw_shell);
 	pam_putenv(handle, env);
-	snprintf(env, sizeof(env), "PATH=%s", _PATH_DEFPATH);
+	snprintf(env, sizeof env, "PATH=%s", _PATH_DEFPATH);
+	pam_putenv(handle, env);
+	snprintf(env, sizeof env, "HOME=%s", pw->pw_dir);
 	pam_putenv(handle, env);
 	
 	/* Run command */
