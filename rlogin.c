@@ -32,6 +32,8 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+char *argv0;
+
 void usage(void) {
 	fprintf(stderr, "Usage: rlogin [-l user] [-p port] host\n");
 }
@@ -132,10 +134,12 @@ int main(int argc, char **argv) {
 	struct winsize winsize;
 	int winchsupport = 0;
 	
+	argv0 = argv[0];
+	
 	/* Lookup local username */
 	
 	if (!(pw = getpwuid(getuid()))) {
-		fprintf(stderr, "%s: Could not lookup username: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not lookup username: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	user = luser = pw->pw_name;
@@ -151,14 +155,14 @@ int main(int argc, char **argv) {
 				port = optarg;
 				break;
 			default:
-				fprintf(stderr, "%s: Unknown option!\n", argv[0]);
+				fprintf(stderr, "%s: Unknown option!\n", argv0);
 				usage();
 				return 1;
 		}
 	}
 	
 	if(optind == argc) {
-		fprintf(stderr, "%s: No host specified!\n", argv[0]);
+		fprintf(stderr, "%s: No host specified!\n", argv0);
 		usage();
 		return 1;
 	}
@@ -166,7 +170,7 @@ int main(int argc, char **argv) {
 	host = argv[optind++];
 	
 	if(optind != argc) {
-		fprintf(stderr, "%s: Too many arguments!\n", argv[0]);
+		fprintf(stderr, "%s: Too many arguments!\n", argv0);
 		usage();
 		return 1;
 	}
@@ -180,7 +184,7 @@ int main(int argc, char **argv) {
 	err = getaddrinfo(host, port, &hint, &ai);
 	
 	if(err) {
-		fprintf(stderr, "%s: Error looking up host: %s\n", argv[0], gai_strerror(err));
+		fprintf(stderr, "%s: Error looking up host: %s\n", argv0, gai_strerror(err));
 		return 1;
 	}
 	
@@ -188,7 +192,7 @@ int main(int argc, char **argv) {
 	
 	for(aip = ai; aip; aip = aip->ai_next) {
 		if(getnameinfo(aip->ai_addr, aip->ai_addrlen, hostaddr, sizeof(hostaddr), portnr, sizeof(portnr), NI_NUMERICHOST | NI_NUMERICSERV)) {
-			fprintf(stderr, "%s: Error resolving address: %s\n", argv[0], strerror(errno));
+			fprintf(stderr, "%s: Error resolving address: %s\n", argv0, strerror(errno));
 			return 1;
 		}
 		fprintf(stderr, "Trying %s port %s...",	hostaddr, portnr);
@@ -234,7 +238,7 @@ int main(int argc, char **argv) {
 	}
 	
 	if(!aip) {
-		fprintf(stderr, "%s: Could not make a connection.\n", argv[0]);
+		fprintf(stderr, "%s: Could not make a connection.\n", argv0);
 		return 1;
 	}
 			
@@ -243,7 +247,7 @@ int main(int argc, char **argv) {
 	/* Drop privileges */
 	
 	if(setuid(getuid())) {
-		fprintf(stderr, "%s: Unable to drop privileges: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to drop privileges: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -252,7 +256,7 @@ int main(int argc, char **argv) {
 	term = getenv("TERM")?:"network";
 	
 	if(tcgetattr(0, &tios)) {
-		fprintf(stderr, "%s: Unable to get terminal attributes: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to get terminal attributes: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -264,7 +268,7 @@ int main(int argc, char **argv) {
 	   safewrite(sock, term, strlen(term)) == -1 ||
 	   safewrite(sock, "/", 1) == -1 ||
 	   safewrite(sock, speed, strlen(speed) + 1) == -1) {
-		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 
@@ -273,19 +277,19 @@ int main(int argc, char **argv) {
 	errno = 0;
 	
 	if(read(sock, buf, 1) != 1 || *buf) {
-		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 
 	/* Receive SIGWINCH notifications through a file descriptor */
 	
 	if(pipe(winchpipe)) {
-		fprintf(stderr, "%s: pipe() failed: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: pipe() failed: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
 	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
-		fprintf(stderr, "%s: signal() failed: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: signal() failed: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -360,7 +364,7 @@ int main(int argc, char **argv) {
 				if(*buf == (char)0x80) {
 					winchsupport = 1;
 					if(safewrite(winchpipe[1], "", 1) == -1){
-						fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
+						fprintf(stderr, "%s: write() failed: %s\n", argv0, strerror(errno));
 						return 1;
 					}
 				}
@@ -388,7 +392,7 @@ int main(int argc, char **argv) {
 	/* Clean up */
 
 	if(errno) {
-		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	

@@ -37,8 +37,10 @@
 #include <utmp.h>
 #include <grp.h>
 
+char *argv0;
+
 void usage(void) {
-	syslog(LOG_NOTICE, "Usage: rlogind");
+	syslog(LOG_NOTICE, "Usage: %s", argv0);
 }
 
 /* Make sure everything gets written */
@@ -198,6 +200,8 @@ int main(int argc, char **argv) {
 	char *pamuser;
 	
 	int pid;
+	
+	argv0 = argv[0];
 	
 	/* Process options */
 			
