@@ -26,8 +26,10 @@
 #include <string.h>
 #include <errno.h>
 
+char *argv0;
+
 void usage(void) {
-	fprintf(stderr, "Usage: rsh [-l user] [-p port] host command...\n");
+	fprintf(stderr, "Usage: %s [-l user] [-p port] host command...\n", argv0);
 }
 
 /* Make sure everything gets written */
@@ -71,10 +73,12 @@ int main(int argc, char **argv) {
 	
 	struct pollfd pfd[3];
 	
+	argv0 = argv[0];
+	
 	/* Lookup local username */
 	
 	if (!(pw = getpwuid(getuid()))) {
-		fprintf(stderr, "%s: Could not lookup username: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not lookup username: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	user = luser = pw->pw_name;
@@ -84,20 +88,20 @@ int main(int argc, char **argv) {
 	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
 		switch(opt) {
 			case 'l':
-				user = optarg;
+				luser = user = optarg;
 				break;
 			case 'p':
 				port = optarg;
 				break;
 			default:
-				fprintf(stderr, "%s: Unknown option!\n", argv[0]);
+				fprintf(stderr, "%s: Unknown option!\n", argv0);
 				usage();
 				return 1;
 		}
 	}
 	
 	if(optind == argc) {
-		fprintf(stderr, "%s: No host specified!\n", argv[0]);
+		fprintf(stderr, "%s: No host specified!\n", argv0);
 		usage();
 		return 1;
 	}
@@ -113,7 +117,7 @@ int main(int argc, char **argv) {
 	err = getaddrinfo(host, port, &hint, &ai);
 	
 	if(err) {
-		fprintf(stderr, "%s: Error looking up host: %s\n", argv[0], gai_strerror(err));
+		fprintf(stderr, "%s: Error looking up host: %s\n", argv0, gai_strerror(err));
 		return 1;
 	}
 	
@@ -121,7 +125,7 @@ int main(int argc, char **argv) {
 	
 	for(aip = ai; aip; aip = aip->ai_next) {
 		if(getnameinfo(aip->ai_addr, aip->ai_addrlen, hostaddr, sizeof(hostaddr), portnr, sizeof(portnr), NI_NUMERICHOST | NI_NUMERICSERV)) {
-			fprintf(stderr, "%s: Error resolving address: %s\n", argv[0], strerror(errno));
+			fprintf(stderr, "%s: Error resolving address: %s\n", argv0, strerror(errno));
 			return 1;
 		}
 		fprintf(stderr, "Trying %s port %s...",	hostaddr, portnr);
@@ -167,14 +171,14 @@ int main(int argc, char **argv) {
 	}
 	
 	if(!aip) {
-		fprintf(stderr, "%s: Could not make a connection.\n", argv[0]);
+		fprintf(stderr, "%s: Could not make a connection.\n", argv0);
 		return 1;
 	}
 	
 	/* Create a socket for the incoming connection for stderr output */
 	
 	if((lsock = socket(aip->ai_family, aip->ai_socktype, aip->ai_protocol)) == -1) {
-		fprintf(stderr, "%s: Could not open socket: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not open socket: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -186,7 +190,7 @@ int main(int argc, char **argv) {
 		snprintf(lport, sizeof(lport), "%d", i);
 		err = getaddrinfo(NULL, lport, &hint, &lai);
 		if(err) {
-			fprintf(stderr, "%s: Error looking up localhost: %s\n", argv[0], gai_strerror(err));
+			fprintf(stderr, "%s: Error looking up localhost: %s\n", argv0, gai_strerror(err));
 			return 1;
 		}
 
@@ -201,19 +205,19 @@ int main(int argc, char **argv) {
 	}
 	
 	if(err) {
-		fprintf(stderr, "%s: Could not bind to privileged port: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not bind to privileged port: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
 	if(listen(lsock, 1)) {
-		fprintf(stderr, "%s: Could not listen: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not listen: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
 	/* Drop privileges */
 	
 	if(setuid(getuid())) {
-		fprintf(stderr, "%s: Unable to drop privileges: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to drop privileges: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -222,24 +226,24 @@ int main(int argc, char **argv) {
 	if(safewrite(sock, lport, strlen(lport) + 1) == -1 || 
 	   safewrite(sock, luser, strlen(luser) + 1) == -1 ||
 	   safewrite(sock, user, strlen(user) + 1) == -1) {
-		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 
 	for(; optind < argc; optind++) {
 		if(safewrite(sock, argv[optind], strlen(argv[optind])) == -1) {
-			fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+			fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 			return 1;
 		}
 		if(optind < argc - 1)
 			if(safewrite(sock, " ", 1) == -1) {
-				fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+				fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 				return 1;
 			}
 	}
 
 	if(safewrite(sock, "", 1) == -1) {
-		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 
@@ -248,14 +252,14 @@ int main(int argc, char **argv) {
 	errno = 0;
 	
 	if(read(sock, buf, 1) != 1 || *buf) {
-		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 
 	/* Wait for incoming connection from server */
 	
 	if((esock = accept(lsock, &raddr, &raddrlen)) == -1) {
-		fprintf(stderr, "%s: Could not accept stderr connection: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: Could not accept stderr connection: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
@@ -274,40 +278,50 @@ int main(int argc, char **argv) {
 		errno = 0;
 		
 		if(poll(pfd, 3, -1) == -1) {
-			fprintf(stderr, "%s: Error while polling: %s\n", argv[0], strerror(errno));
+			fprintf(stderr, "%s: Error while polling: %s\n", argv0, strerror(errno));
 			return 1;
 		}
 
 		if(pfd[2].revents) {
 			len = read(esock, buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			if(safewrite(2, buf, len) == -1)
-				break;
+			if(len <= 0) {
+				if(pfd[1].events)
+					pfd[2].events = 0;
+				else
+					break;
+			} else
+				if(safewrite(2, buf, len) == -1)
+					break;
 			pfd[2].revents = 0;
 		}
 
 		if(pfd[1].revents) {
 			len = read(sock, buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			if(safewrite(1, buf, len) == -1)
-				break;
+			if(len <= 0) {
+				if(pfd[2].events)
+					pfd[1].events = 0;
+				else
+					break;
+			} else
+				if(safewrite(1, buf, len) == -1)
+					break;
 			pfd[1].revents = 0;
 		}
 
 		if(pfd[0].revents) {
 			len = read(0, buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			if(safewrite(sock, buf, len) == -1)
-				break;
+			if(len <= 0) {
+				pfd[0].events = 0;
+				shutdown(sock, SHUT_WR);
+			} else
+				if(safewrite(sock, buf, len) == -1)
+					break;
 			pfd[0].revents = 0;
 		}
 	}
 		
 	if(errno) {
-		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+		fprintf(stderr, "%s: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
