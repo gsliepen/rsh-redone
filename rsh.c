@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 	struct addrinfo hint, *ai, *aip, *lai;
 	struct sockaddr raddr;
 	int raddrlen;
-	int err, sock = -1, lsock = -1, esock, i;
+	int err, sock = -1, lsock = -1, esock = -1, i;
 	
 	char opt;
 
@@ -71,7 +71,8 @@ int main(int argc, char **argv) {
 	char buf[4096];
 	int len;
 	
-	struct pollfd pfd[3];
+	fd_set infd, outfd, infdset, outfdset, errfd;
+	int maxfd;
 	
 	argv0 = argv[0];
 	
@@ -266,57 +267,48 @@ int main(int argc, char **argv) {
 	close(lsock);
 	
 	/* Process input/output */
-	
-	pfd[0].fd = 0;
-	pfd[0].events = POLLIN | POLLERR | POLLHUP;
-	pfd[1].fd = sock;
-	pfd[1].events = POLLIN | POLLERR | POLLHUP;
-	pfd[2].fd = esock;
-	pfd[2].events = POLLIN | POLLERR | POLLHUP;
 
+	FD_ZERO(&infdset);
+	FD_ZERO(&outfdset);
+	FD_SET(0, &infdset);
+	FD_SET(sock, &infdset);
+	FD_SET(esock, &infdset);
+	
+	maxfd = (sock>esock?sock:esock) + 1;
+	
 	for(;;) {
 		errno = 0;
-		
-		if(poll(pfd, 3, -1) == -1) {
-			fprintf(stderr, "%s: Error while polling: %s\n", argv0, strerror(errno));
+		infd = infdset;
+		outfd = outfdset;
+		errfd = infdset;
+	
+		if(select(maxfd, &infd, &outfd, &errfd, NULL) == 0) {
+			fprintf(stderr, "%s: Error while doing select(): %s\n", argv0, strerror(errno));
 			return 1;
 		}
 
-		if(pfd[2].revents) {
+		if(FD_ISSET(esock, &infd)) {
 			len = read(esock, buf, sizeof(buf));
 			if(len <= 0) {
-				if(pfd[1].events)
-					pfd[2].events = 0;
+				if(FD_ISSET(sock, &infdset))
+					FD_CLR(esock, &infdset);
 				else
 					break;
 			} else
 				if(safewrite(2, buf, len) == -1)
 					break;
-			pfd[2].revents = 0;
 		}
 
-		if(pfd[1].revents) {
+		if(FD_ISSET(sock, &infd)) {
 			len = read(sock, buf, sizeof(buf));
 			if(len <= 0) {
-				if(pfd[2].events)
-					pfd[1].events = 0;
+				if(FD_ISSET(esock, &infdset))
+					FD_CLR(sock, &infdset);
 				else
 					break;
 			} else
 				if(safewrite(1, buf, len) == -1)
 					break;
-			pfd[1].revents = 0;
-		}
-
-		if(pfd[0].revents) {
-			len = read(0, buf, sizeof(buf));
-			if(len <= 0) {
-				pfd[0].events = 0;
-				shutdown(sock, SHUT_WR);
-			} else
-				if(safewrite(sock, buf, len) == -1)
-					break;
-			pfd[0].revents = 0;
 		}
 	}
 		
