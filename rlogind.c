@@ -37,15 +37,15 @@
 #include <utmp.h>
 #include <grp.h>
 
-static char *argv0;
+char *argv0;
 
-static void usage(void) {
+void usage(void) {
 	syslog(LOG_NOTICE, "Usage: %s", argv0);
 }
 
 /* Make sure everything gets written */
 
-static ssize_t safewrite(int fd, const void *buf, size_t count) {
+ssize_t safewrite(int fd, const void *buf, size_t count) {
 	int result;
 	
 	while(count) {
@@ -61,7 +61,7 @@ static ssize_t safewrite(int fd, const void *buf, size_t count) {
 
 /* Read until a NULL byte is encountered */
 
-static ssize_t readtonull(int fd, char *buf, size_t count) {
+ssize_t readtonull(int fd, char *buf, size_t count) {
 	int len = 0, result;
 	
 	while(count) {
@@ -83,7 +83,7 @@ static ssize_t readtonull(int fd, char *buf, size_t count) {
 
 /* PAM conversation function */
 
-static ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
+ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
 	int len = 0, result;
 	
 	while(count) {
@@ -116,7 +116,7 @@ static ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo)
 	return -1;
 }
 
-static int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res, void *app) {
+int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res, void *app) {
 	int i, err;
 	char reply[1024];
 	
