@@ -104,7 +104,7 @@ typedef struct ring_t {
 	off_t off;
 } ring_t;
 
-static ssize_t ringread(ring_t *ring, int fd) {
+ssize_t ringread(ring_t *ring, int fd) {
 	ssize_t r, c, o;
 	fd_set rfds;
 	struct iovec io[2];
@@ -143,7 +143,7 @@ static ssize_t ringread(ring_t *ring, int fd) {
 }
 
 /* safewrite for rings */
-static ssize_t ringwrite(ring_t *ring, int fd, size_t count) {
+ssize_t ringwrite(ring_t *ring, int fd, size_t count) {
 	struct iovec io[2];
 	size_t part;
 
@@ -161,7 +161,7 @@ static ssize_t ringwrite(ring_t *ring, int fd, size_t count) {
 	return safewritev(fd, io, 2);
 }
 
-static void *ringchr(ring_t *ring, int c, size_t extra) {
+void *ringchr(ring_t *ring, int c, size_t extra) {
 	off_t off = ring->off;
 	size_t fill = ring->fill;
 
@@ -184,7 +184,7 @@ static void *ringchr(ring_t *ring, int c, size_t extra) {
 	return NULL;
 }
 
-static ssize_t ringdist(ring_t *ring, unsigned char *s) {
+ssize_t ringdist(ring_t *ring, unsigned char *s) {
 	ssize_t r;
 	r = s - (ring->buf + ring->off);
 	if(r < 0)
@@ -194,7 +194,7 @@ static ssize_t ringdist(ring_t *ring, unsigned char *s) {
 
 #define MAXMMAP (1<<22)
 
-static ssize_t mmapcopy(int fd, ssize_t written, ssize_t size) {
+ssize_t mmapcopy(int fd, ssize_t written, ssize_t size) {
 	ssize_t r, length, chunk;
 	off_t start, skip;
 	void *m;
@@ -888,7 +888,7 @@ u_short	port;
 uid_t	userid;
 int errs, rem;
 int pflag, iamremote, iamrecursive, targetshouldbedirectory;
-static char **saved_environ;
+char **saved_environ;
 
 #define	CMDNEEDS	64
 char cmd[CMDNEEDS];		/* must hold "rcp -r -p -d\0" */
@@ -898,21 +898,21 @@ typedef struct _buf {
 	char	*buf;
 } BUF;
 
-static void lostconn(int);
-static char *colon(char *);
-static int response(void);
-static void verifydir(const char *cp);
-static int okname(const char *cp0);
-static int susystem(const char *s);
-static void source(int argc, char *argv[]);
-static void rsource(char *name, struct stat *statp);
-static void sink(int argc, char *argv[]);
-static BUF *allocbuf(BUF *bp, int fd, int blksize);
-static void nospace(void);
-static void usage(void);
-static void toremote(const char *targ, int argc, char *argv[]);
-static void tolocal(int argc, char *argv[]);
-static void error(const char *fmt, ...);
+void lostconn(int);
+char *colon(char *);
+int response(void);
+void verifydir(const char *cp);
+int okname(const char *cp0);
+int susystem(const char *s);
+void source(int argc, char *argv[]);
+void rsource(char *name, struct stat *statp);
+void sink(int argc, char *argv[]);
+BUF *allocbuf(BUF *bp, int fd, int blksize);
+void nospace(void);
+void usage(void);
+void toremote(const char *targ, int argc, char *argv[]);
+void tolocal(int argc, char *argv[]);
+void error(const char *fmt, ...);
 
 int
 main(int argc, char *argv[])
@@ -1015,7 +1015,7 @@ main(int argc, char *argv[])
 	exit(errs);
 }
 
-static void
+void
 toremote(const char *targ, int argc, char *argv[])
 {
 	int i, len, tos;
@@ -1107,7 +1107,7 @@ toremote(const char *targ, int argc, char *argv[])
 	}
 }
 
-static void
+void
 tolocal(int argc, char *argv[])
 {
  	static char dot[] = ".";
@@ -1172,7 +1172,7 @@ tolocal(int argc, char *argv[])
 	}
 }
 
-static void
+void
 verifydir(const char *cp)
 {
 	struct stat stb;
@@ -1186,7 +1186,7 @@ verifydir(const char *cp)
 	exit(1);
 }
 
-static char *
+char *
 colon(char *cp)
 {
 	for (; *cp; ++cp) {
@@ -1198,7 +1198,7 @@ colon(char *cp)
 	return NULL;
 }
 
-static int
+int
 okname(const char *cp0)
 {
 	const char *cp = cp0;
@@ -1219,7 +1219,7 @@ bad:
 
 typedef void (*sighandler)(int);
 
-static int
+int
 susystem(const char *s)
 {
 	int status, pid, w;
@@ -1255,7 +1255,7 @@ susystem(const char *s)
 	return(status);
 }
 
-static void
+void
 source(int argc, char *argv[])
 {
 	struct stat stb;
@@ -1337,7 +1337,7 @@ notreg:			(void)close(f);
 	}
 }
 
-static void
+void
 rsource(char *name, struct stat *statp)				if(mkdir(name, mode) || chdir(name)) {
 					sendresponse(strerror(errno));
 					continue;
@@ -1406,7 +1406,7 @@ rsource(char *name, struct stat *statp)				if(mkdir(name, mode) || chdir(name)) 
 	(void)response();
 }
 
-static int
+int
 response(void)
 {
 	register char *cp;
@@ -1441,7 +1441,7 @@ response(void)
 	return 0;
 }
 
-static void
+void
 lostconn(int ignore)
 {
 	(void)ignore;
@@ -1451,7 +1451,7 @@ lostconn(int ignore)
 	exit(1);
 }
 
-static void
+void
 sink(int argc, char *argv[])
 {
 	register char *cp;
@@ -1670,7 +1670,7 @@ screwup:
 	exit(1);
 }
 
-static BUF *
+BUF *
 allocbuf(BUF *bp, int fd, int blksize)
 {
 	struct stat stb;
@@ -1715,14 +1715,14 @@ error(const char *fmt, ...)
 	va_end(ap);
 }
 
-static void 
+void 
 nospace(void)
 {
 	(void)fprintf(stderr, "rcp: out of memory.\n");
 	exit(1);
 }
 
-static void
+void
 usage(void)
 {
 	(void)fprintf(stderr,
