@@ -306,17 +306,17 @@ int main(int argc, char **argv) {
 	pw = getpwnam(pamuser);
 
 	if (!pw) {
-    	syslog(LOG_ERR, "PAM_USER does not exist?!");
+		syslog(LOG_ERR, "PAM_USER does not exist?!");
 		return 1;
 	}
 	
 	if (setgid(pw->pw_gid)) {
-    	syslog(LOG_ERR, "setgid() failed: %m");
+		syslog(LOG_ERR, "setgid() failed: %m");
 		return 1;
 	}
 	
 	if (initgroups(pamuser, pw->pw_gid)) {
-    	syslog(LOG_ERR, "initgroups() failed: %m");
+		syslog(LOG_ERR, "initgroups() failed: %m");
 		return 1;
 	}
 	
