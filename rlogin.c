@@ -33,6 +33,7 @@
 #include <fcntl.h>
 
 char *argv0;
+int sock = -1, winchsupport = 0;
 
 void usage(void) {
 	fprintf(stderr, "Usage: rlogin [-l user] [-p port] host\n");
@@ -100,10 +101,22 @@ char *termspeed(speed_t speed) {
 
 /* Catch SIGWINCH */
 
-int winchpipe[2];
-
 void sigwinch_h(int signal) {
-	write(winchpipe[1], "", 1);
+	char buf[12];
+	struct winsize winsize;
+	
+	if(winchsupport) {
+		buf[0] = buf[1] = (char)0xFF;
+		buf[2] = buf[3] = 's';
+
+		ioctl(0, TIOCGWINSZ, &winsize);
+		*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
+		*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
+		*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
+		*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
+
+		safewrite(sock, buf, 12);
+	}
 }
 
 int main(int argc, char **argv) {
@@ -116,7 +129,7 @@ int main(int argc, char **argv) {
 	struct passwd *pw;
 	
 	struct addrinfo hint, *ai, *aip, *lai;
-	int err, sock = -1, i;
+	int err, i;
 	
 	char opt;
 
@@ -129,10 +142,9 @@ int main(int argc, char **argv) {
 	char buf[4096];
 	int len;
 	
-	struct pollfd pfd[3];
+	struct pollfd pfd[2];
 	
-	struct winsize winsize;
-	int winchsupport = 0;
+	int sigmask;
 	
 	argv0 = argv[0];
 	
@@ -281,18 +293,6 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	/* Receive SIGWINCH notifications through a file descriptor */
-	
-	if(pipe(winchpipe)) {
-		fprintf(stderr, "%s: pipe() failed: %s\n", argv0, strerror(errno));
-		return 1;
-	}
-	
-	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
-		fprintf(stderr, "%s: signal() failed: %s\n", argv0, strerror(errno));
-		return 1;
-	}
-	
 	/* Set up terminal on the client */
 	
 	oldtios = tios;
@@ -314,47 +314,32 @@ int main(int argc, char **argv) {
 
 	tcsetattr(0, TCSADRAIN, &tios);
 
+	/* Handle SIGWINCH */
+	
+	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
+		fprintf(stderr, "%s: signal() failed: %s\n", argv0, strerror(errno));
+		return 1;
+	}
+	
 	/* Process input/output */
 	
 	pfd[0].fd = 0;
 	pfd[0].events = POLLIN | POLLERR | POLLHUP;
 	pfd[1].fd = sock;
 	pfd[1].events = POLLIN | POLLERR | POLLHUP | POLLPRI;
-	pfd[2].fd = winchpipe[0];
-	pfd[2].events = POLLIN | POLLERR | POLLHUP;
 
 	for(;;) {
 		errno = 0;
 		
-		if(poll(pfd, 3, -1) == -1) {
+		if(poll(pfd, 2, -1) == -1) {
 			if(errno == EINTR)
 				continue;
 			break;
 		}
-
-		/* If we got a SIGWINCH, send new window size to server */
 		
-		if(pfd[2].revents) {
-			len = read(winchpipe[0], buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			
-			if(winchsupport) {
-				buf[0] = buf[1] = (char)0xFF;
-				buf[2] = buf[3] = 's';
-
-				ioctl(0, TIOCGWINSZ, &winsize);
-				*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
-				*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
-				*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
-				*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
-
-				if(safewrite(sock, buf, 12) == -1)
-					break;
-			}
-
-			pfd[1].revents = 0;
-		}
+		/* Block SIGWINCH so writes don't interfere with eachother */
+		
+		sigmask = sigblock(sigmask(SIGWINCH));
 
 		if(pfd[1].revents) {
 			if(pfd[1].revents & POLLPRI) {
@@ -363,10 +348,7 @@ int main(int argc, char **argv) {
 					break;
 				if(*buf == (char)0x80) {
 					winchsupport = 1;
-					if(safewrite(winchpipe[1], "", 1) == -1){
-						fprintf(stderr, "%s: write() failed: %s\n", argv0, strerror(errno));
-						return 1;
-					}
+					sigwinch_h(SIGWINCH);
 				}
 			}
 			if(pfd[1].revents & ~POLLPRI) {
@@ -378,6 +360,10 @@ int main(int argc, char **argv) {
 			}
 			pfd[1].revents = 0;
 		}
+		
+		/* Unblock SIGWINCH */
+		
+		sigsetmask(sigmask);
 
 		if(pfd[0].revents) {
 			len = read(0, buf, sizeof(buf));
