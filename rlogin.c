@@ -337,10 +337,6 @@ int main(int argc, char **argv) {
 			break;
 		}
 		
-		/* Block SIGWINCH so writes don't interfere with eachother */
-		
-		sigmask = sigblock(sigmask(SIGWINCH));
-
 		if(pfd[1].revents) {
 			if(pfd[1].revents & POLLPRI) {
 				len = recv(sock, buf, 1, MSG_OOB);
@@ -360,10 +356,10 @@ int main(int argc, char **argv) {
 			}
 			pfd[1].revents = 0;
 		}
+
+		/* Block SIGWINCH so writes don't interfere with eachother */
 		
-		/* Unblock SIGWINCH */
-		
-		sigsetmask(sigmask);
+		sigmask = sigblock(sigmask(SIGWINCH));
 
 		if(pfd[0].revents) {
 			len = read(0, buf, sizeof(buf));
@@ -373,6 +369,10 @@ int main(int argc, char **argv) {
 				break;
 			pfd[0].revents = 0;
 		}
+		
+		/* Unblock SIGWINCH */
+		
+		sigsetmask(sigmask);
 	}
 
 	/* Clean up */
