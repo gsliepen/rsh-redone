@@ -4,7 +4,7 @@
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License version 2 as published
-	by the Free Software Foundation.
+    by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -280,7 +280,7 @@ int main(int argc, char **argv) {
 	}
 	
 	tty = ttyname(slave);
-    
+
 	/* Start PAM */
 	
 	if((err = pam_start("rlogin", luser, &conv, &handle)) != PAM_SUCCESS) {
@@ -374,6 +374,11 @@ int main(int argc, char **argv) {
 	
 	if((pid = fork()) < 0) {
 		syslog(LOG_ERR, "fork() failed: %m");
+		return 1;
+	}
+	
+	if(send(1, "\x80", 1, MSG_OOB) <= 0) {
+		syslog(LOG_ERR, "Unable to write OOB \x80: %m");
 		return 1;
 	}
 	
@@ -471,7 +476,6 @@ int main(int argc, char **argv) {
 		tcsetattr(0, TCSADRAIN, &tios);
 
 		/* Create environment */
-		
 
 		asprintf(&envp[0], "TERM=%s", term);
 		envp[1] = NULL;
