@@ -18,8 +18,9 @@ rsh: rsh.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 install: $(PROGRAMS)
-	$(INSTALL) rlogin rsh $(DESTDIR)$(BINDIR)/
-	$(INSTALL) -m 4711 rlogind $(DESTDIR)$(SBINDIR)/
+	$(INSTALL) rsh $(DESTDIR)$(BINDIR)/
+	$(INSTALL) -m 4711 rlogin $(DESTDIR)$(BINDIR)/
+	$(INSTALL) rlogind $(DESTDIR)$(SBINDIR)/
 
 clean:
 	rm -f $(PROGRAMS)

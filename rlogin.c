@@ -357,14 +357,14 @@ int main(int argc, char **argv) {
 			if(len <= 0)
 				break;
 			
-			buf[0] = buf[1] = 0xFF;
+			buf[0] = buf[1] = (char)0xFF;
 			buf[2] = buf[3] = 's';
 			
 			ioctl(0, TIOCGWINSZ, &winsize);
-			*(int16_t *)(buf + 4) = htons(winsize.ws_row);
-			*(int16_t *)(buf + 6) = htons(winsize.ws_col);
-			*(int16_t *)(buf + 8) = htons(winsize.ws_xpixel);
-			*(int16_t *)(buf + 10) = htons(winsize.ws_ypixel);
+			*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
+			*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
+			*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
+			*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
 			
 			if(safewrite(sock, buf, 12) <= 0)
 				break;

@@ -170,6 +170,8 @@ int main(int argc, char **argv) {
 	struct pollfd pfd[3];
 	
 	struct winsize winsize;
+	uint16_t winbuf[4];
+	int i;
 	
 	int master, slave;
 	char *tty;
@@ -383,13 +385,33 @@ int main(int argc, char **argv) {
 			if(poll(pfd, 2, -1) == -1) {
 				if(errno == EINTR)
 					continue;
-				goto end;
+				break;
 			}
 
 			if(pfd[0].revents) {
 				len = read(0, buf, sizeof(buf));
 				if(len <= 0)
-					goto end;
+					break;
+				
+				/* Scan for control messages. Yes this is evil and should be done differently. */
+				
+				for(i = 0; i < len - 11;) {
+					if(buf[i++] == (char)0xFF)
+					if(buf[i++] == (char)0xFF)
+					if(buf[i++] == 's')
+					if(buf[i++] == 's') {
+						memcpy(winbuf, buf + i, 8);
+						winsize.ws_row = ntohs(winbuf[0]);
+						winsize.ws_col = ntohs(winbuf[1]);
+						winsize.ws_xpixel = ntohs(winbuf[2]);
+						winsize.ws_ypixel = ntohs(winbuf[3]);
+						if(ioctl(master, TIOCSWINSZ, &winsize))
+							break;
+						memcpy(buf + i - 4, buf + i + 8, len - i - 8);
+						i -= 4;
+						len -= 12;
+					}
+				}
 				safewrite(master, buf, len);
 				pfd[0].revents = 0;
 			}
@@ -397,13 +419,14 @@ int main(int argc, char **argv) {
 			if(pfd[1].revents) {
 				len = read(master, buf, sizeof(buf));
 				if(len <= 0)
-					goto end;
+					break;
 				safewrite(1, buf, len);
 				pfd[1].revents = 0;
 			}
 		}
-end:
+
 		/* Clean up real quickly :) */
+		
 		syslog(LOG_NOTICE, "Closing connection with %s@%s: %m", user, host);
 		return 0;
 	} else {
