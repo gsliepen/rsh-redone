@@ -102,7 +102,6 @@ int winchpipe[2];
 
 void sigwinch_h(int signal) {
 	write(winchpipe[1], "", 1);
-	return;
 }
 
 int main(int argc, char **argv) {
@@ -248,23 +247,25 @@ int main(int argc, char **argv) {
 	}
 	
 	/* Send required information to the server */
-	
-	safewrite(sock, "", 1);
-	safewrite(sock, luser, strlen(luser) + 1);
-	safewrite(sock, user, strlen(user) + 1);
 
 	term = getenv("TERM")?:"network";
-
-	safewrite(sock, term, strlen(term));
-
+	
 	if(tcgetattr(0, &tios)) {
 		fprintf(stderr, "%s: Unable to get terminal attributes: %s\n", argv[0], strerror(errno));
 		return 1;
 	}
 	
 	speed = termspeed(cfgetispeed(&tios));
-	safewrite(sock, "/", 1);
-	safewrite(sock, speed, strlen(speed) + 1);
+	
+	if(safewrite(sock, "", 1) <= 0 || 
+	   safewrite(sock, luser, strlen(luser) + 1) <= 0 ||
+	   safewrite(sock, user, strlen(user) + 1) <= 0 ||
+	   safewrite(sock, term, strlen(term)) <= 0 ||
+	   safewrite(sock, "/", 1) <= 0 ||
+	   safewrite(sock, speed, strlen(speed) + 1) <= 0) {
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
 
 	/* Wait for acknowledgement from server */
 	
@@ -280,12 +281,11 @@ int main(int argc, char **argv) {
 	oldtios = tios;
 	tios.c_oflag &= ~(ONLCR|OCRNL);
 	tios.c_lflag &= ~(ECHO|ICANON|ISIG);
-	tios.c_iflag &= ~(ICRNL);
-	// tios.c_cc[VTIME] = 1;
-	// tios.c_cc[VMIN] = 1;
-	tios.c_iflag &= ~(ISTRIP); // Eight-bit clean
-	tios.c_iflag &= ~IXON;
-	/*
+	tios.c_iflag &= ~(ICRNL|ISTRIP|IXON);
+	
+	/* How much of the stuff below is really needed?
+	tios.c_cc[VTIME] = 1;
+	tios.c_cc[VMIN] = 1;
 	tios.c_cc[VSUSP] = 255;
 	tios.c_cc[VEOL] = 255;
 	tios.c_cc[VREPRINT] = 255;
@@ -299,13 +299,20 @@ int main(int argc, char **argv) {
 
 	/* Receive SIGWINCH notifications through a file descriptor */
 	
-	
 	if(pipe(winchpipe)) {
 		fprintf(stderr, "%s: pipe() failed: %s\n", argv[0], strerror(errno));
 		return 1;
 	}
-	signal(SIGWINCH, sigwinch_h);
-	write(winchpipe[1], "", 1);
+	
+	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
+		fprintf(stderr, "%s: signal() failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	
+	if(write(winchpipe[1], "", 1) <= 0){
+		fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
 					
 	/* Process input/output */
 	
@@ -322,22 +329,24 @@ int main(int argc, char **argv) {
 		if(poll(pfd, 3, -1) == -1) {
 			if(errno == EINTR)
 				continue;
-			goto end;
+			break;
 		}
 
 		if(pfd[0].revents) {
 			len = read(0, buf, sizeof(buf));
 			if(len <= 0)
-				goto end;
-			safewrite(sock, buf, len);
+				break;
+			if(safewrite(sock, buf, len) <= 0)
+				break;
 			pfd[0].revents = 0;
 		}
 
 		if(pfd[1].revents) {
 			len = read(sock, buf, sizeof(buf));
 			if(len <= 0)
-				goto end;
-			safewrite(1, buf, len);
+				break;
+			if(safewrite(1, buf, len) <= 0)
+				break;
 			pfd[1].revents = 0;
 		}
 
@@ -346,7 +355,7 @@ int main(int argc, char **argv) {
 		if(pfd[2].revents) {
 			len = read(winchpipe[0], buf, sizeof(buf));
 			if(len <= 0)
-				goto end;
+				break;
 			
 			buf[0] = buf[1] = 0xFF;
 			buf[2] = buf[3] = 's';
@@ -357,14 +366,15 @@ int main(int argc, char **argv) {
 			*(int16_t *)(buf + 8) = htons(winsize.ws_xpixel);
 			*(int16_t *)(buf + 10) = htons(winsize.ws_ypixel);
 			
-			safewrite(sock, buf, 12);
+			if(safewrite(sock, buf, 12) <= 0)
+				break;
 
 			pfd[1].revents = 0;
 		}
 	}
 
 	/* Clean up */
-end:
+
 	tcsetattr(0, TCSADRAIN, &oldtios);
 
 	if(errno) {
