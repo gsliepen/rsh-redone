@@ -1,4 +1,4 @@
-BIN = rlogin rsh
+BIN = rlogin rsh rcp
 SBIN = in.rlogind in.rshd
 MAN1 = rlogin.1 rsh.1
 MAN5 = rhosts.5

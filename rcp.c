@@ -20,8 +20,12 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
@@ -69,70 +73,83 @@ ssize_t saferead(int fd, void *buf, size_t count) {
  *  fill <= len
  */
 
-ssize_t ringread(int fd, void *buf, size_t len, off_t off, size_t fill) {
+typedef struct ring_t {
+	unsigned char *buf;
+	size_t len;
+	size_t fill;
+	off_t off;
+} ring_t;
+
+static ssize_t ringread(ring_t *ring, int fd) {
 	ssize_t r, c, o;
-	fdset_t rfds;
+	fd_set rfds;
 	struct iovec io[2];
 
-	c = len - fill;
-	r = off + fill;
-	o = r - len;
-	io[0].iov_base = buf + r;
-	io[0].iov_len = r = len - r;
-	io[1].iov_base = buf;
-	io[1].iov_len = fill - r;
+	c = ring->len - ring->fill;
+	r = ring->off + ring->fill;
+	o = r - ring->len;
+	io[0].iov_base = ring->buf + r;
+	io[0].iov_len = r = ring->len - r;
+	io[1].iov_base = ring->buf;
+	io[1].iov_len = ring->fill - r;
 
 	for(;;) {
-		if(off && off + fill < len)
+		if(ring->off && ring->off + ring->fill < ring->len)
 			r = readv(fd, io, c);
 		else if(o >= 0)
-			r = read(fd, buf + o, c);
+			r = read(fd, ring->buf + o, c);
 		else
-			r = read(fd, buf + off, c);
+			r = read(fd, ring->buf + ring->off, c);
 
 		if(r >= 0)
 			break;
 		if(errno == EINTR)
 			continue;
 		if(errno != EAGAIN)
-			break;
+			return r;
 
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
-		/* any errors will be caught in the next read() */
 		select(fd+1, &rfds, NULL, NULL, NULL);
+		/* any errors will be caught in the next read() */
 	}
 
+	ring->fill += r;
 	return r;
 }
 
-void *ringchr(const unsigned char *buf, int c, size_t len, off_t off, size_t fill) {
+static void *ringchr(ring_t *ring, int c, size_t extra) {
+	off_t off = ring->off;
+	size_t fill = ring->fill;
+
+	fill -= extra;
+	if(fill <= 0)
+		return NULL;
+
+	off += extra;
+	if(off > ring->len)
+		off -= ring->len;
+
 	while(fill) {
-		if(buf[off] == c)
-			return buf + off;
+		if(ring->buf[off] == c)
+			return ring->buf + off;
 		fill--;
 		off++;
-		if(off > len)
+		if(off > ring->len)
 			off = 0;
 	}
 	return NULL;
 }
 
-void *ringscan(const unsigned char *buf, int c, size_t len, off_t off, size_t fill) {
-	ssize_t r, seen;
-
-	...
-}
-
-ssize_t ringdist(const unsigned char *buf, const unsigned char *s, size_t len, off_t off) {
+static ssize_t ringdist(ring_t *ring, unsigned char *s) {
 	ssize_t r;
-	r = s - (buf + off);
+	r = s - (ring->buf + ring->off);
 	if(r < 0)
-		r += len;
+		r += ring->len;
 	return r;
 }
 
-
+#if 0
 {
 	char *user = NULL;
 	char *luser = NULL;
@@ -411,139 +428,140 @@ int to(char *dname, int preserve, int dir) {
 		}
 	}
 }
-
-#define RINGSIZE 4096
+#endif
 
 int to(char *dname, int preserve, int dir) {
-	ssize_t off, offs, fill = 0;
-	unsigned char ring[RINGSIZE * 2];
-	ssize_t size, r;
-	int flags, mode, i, level = 0;
+	unsigned char buf[65536];
+	char path[4096];
+	ssize_t size, r, offs, part, slash[128];
+	int flags, mode, i, level;
 	unsigned char cmd, c, *s;
-	char path[1234];
-	size_t plen = 0;
 	struct stat st;
+	struct ring_t ring;
 
-	plen = strlen(dname);
-	if(plen + 1 >= RINGSIZE)
+	ring.buf = buf;
+	ring.len = sizeof buf;
+	ring.off = 0;
+	ring.fill = 0;
+
+	slash[level = 0] = strlen(dname);
+	if(slash[level] + 1 >= sizeof path)
 		return errno = EINVAL, -1;
-	memcpy(path, dname, plen + 1);
+	memcpy(path, dname, slash[level] + 1);
 
 	flags = fcntl(STDIN_FILENO, F_GETFL);
 	fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
 
 	for(;;) {	
-		if(!len) {
-			off = 0;
-			r = readring(STDIN_FILENO, ring, RINGSIZE, off, fill);
+		if(!ring.fill) {
+			ring.off = 0;
+			r = ringread(&ring, STDIN_FILENO);
 			if(r <= 0)
 				return -1;
-			fill += r;
 		}
-		switch(cmd = buf[off]) {
+		switch(cmd = ring.buf[ring.off]) {
 			case 'E':
-				if(len < 2) {
-					r = readring(STDIN_FILENO, ring, RINGSIZE, off, fill);
+				if(ring.len < 2) {
+					r = ringread(&ring, STDIN_FILENO);
 					if(!r)
 						errno = EINVAL;
 					if(r <= 0)
 						return -1;
 				}
-				if(ring[off])
+				if(ring.buf[ring.off])
 					return errno = EINVAL, -1;
 				safewrite(STDOUT_FILENO, "", 1);
 				if(!level)
 					return 0;
-				while(plen && path[plen] != '/')
-					plen--;
-				path[plen] = '\0';
-				level--;
-			break
+				path[slash[--level]] = '\0';
+			break;
 			case 'C':
 			case 'D':
-				while(len < 10) {
-					r = readring(STDIN_FILENO, ring, RINGSIZE, off, fill);
+				while(ring.fill < 10) {
+					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
 						return -1;
-					fill += r;
 				}
 				mode = 0;
 				for(i = 0; i < 4; i++) {
-					if(++off > RINGSIZE)
-						off = 0;
-					c = ring[off];
+					if(++ring.off > ring.len)
+						ring.off = 0;
+					c = ring.buf[ring.off];
 					if(c < '0' || c > '7')
 						return errno = EINVAL, -1;
 					mode = mode << 3 | c - '0';
 				}
 
-				if(++off > RINGSIZE)
-					off = 0;
-				if(ring[off] != ' ')
+				if(++ring.off > ring.len)
+					ring.off = 0;
+				if(ring.buf[ring.off] != ' ')
 					return errno = EINVAL, -1;
-				if(++off > RINGSIZE)
-					off = 0;
-				fill -= 6;
+				if(++ring.off > ring.len)
+					ring.off = 0;
+				ring.fill -= 6;
 
-				offs = off;
+				offs = 0;
 				for(;;) {
-					s = ringchr(ring, ' ', RINGSIZE, offs, fill);
+					s = ringchr(&ring, ' ', offs);
 					if(s)
 						break;
-					offs = off + fill;
-					if(fill > 19)
+					offs = ring.fill;
+					if(offs > 19)
 						return errno = EINVAL, -1;
-					r = readring(STDIN_FILENO, ring, RINGSIZE, off, fill);
+					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
 						return -1;
-					fill += r;
 				}
 
-				r = ringdist(buf, s, len, off) + 1;
+				r = ringdist(&ring, s) + 1;
 				if(r == 1 || r > 19)
 						return errno = EINVAL, -1;
 
 				size = 0;
 				for(;;) {
-					c = ring[off];
+					c = ring.buf[ring.off];
 					if(c == ' ')
 						break;
 					if(c < '0' || c > '9')
 						return errno = EINVAL, -1;
 					size = size * 10 + c - '0';
-					if(++off > RINGSIZE)
-						off = 0;
+					if(++ring.off > ring.len)
+						ring.off = 0;
 				}
-				if(++off > RINGSIZE)
-					off = 0;
-				fill -= r + 1;
+				if(++ring.off > ring.len)
+					ring.off = 0;
+				ring.fill -= r + 1;
 
-				offs = off;
+				offs = 0;
 				for(;;) {
-					s = ringchr(ring, '\0', RINGSIZE, offs, fill);
+					s = ringchr(&ring, '\0', offs);
 					if(s)
 						break;
-					offs = off + fill;
-					if(fill == RINGSIZE)
+					offs = ring.fill;
+					if(offs == ring.len)
 						return errno = EINVAL, -1;
-					r = readring(STDIN_FILENO, ring, RINGSIZE, off, fill);
+					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
 						return -1;
-					fill += r;
 				}
 
-				r = ringdist(buf, s, len, off) + 1;
-
-				if(off + r > RINGSIZE)
-					memcpy(ring + RINGSIZE, ring, off + r - RINGSIZE);
-
-				offs = plen + r + 1;
-				if(offs + 1 >= sizeof path)
+				r = ringdist(&ring, s) + 1;
+				slash[level + 1] = slash[level] + r;
+				if(slash[level + 1] + 1 >= sizeof path)
 					return errno = EINVAL, -1;
-				path[plen] = '/';
-				memcpy(path + plen + 1, ring + off, r);
-				off += r;
-				fill -= r;
+				path[slash[level]] = '/';
+
+				offs = ring.off + r - ring.len;
+				s = path + slash[level] + 1;
+				if(offs > 0) {
+					part = ring.len - ring.off;
+					memcpy(s, ring.buf + ring.off, part);
+					memcpy(s + part, ring.buf, offs);
+				} else {
+					memcpy(s, ring.buf + ring.off, r);
+				}
+				ring.off += r;
+				ring.fill -= r;
 
 				if(cmd == 'D') {
 					if(stat(path, &st)) {
@@ -555,23 +573,18 @@ int to(char *dname, int preserve, int dir) {
 						if(!S_ISDIR(st.st_mode))
 							return errno = ENOTDIR, -1;
 					}
-					plen = offs;
 					level++;
 				} else {
-					if(off
-					mmap(...);
-					if(fill) {
-						if(off + fill > RINGSIZE) {
-							memcpy(
+					/* write file */
 				
 				
-					path[plen] = '\0';
+					path[slash[level]] = '\0';
 				}
-			}
 		}
 	}
 }
 
+#if 0
 int split(char *name, char **user, char **host, char **file) {
 	char *colon, *slash, *at;
 	
@@ -1647,4 +1660,5 @@ usage(void)
 	    "usage: rcp [-p] f1 f2; or: rcp [-rp] f1 ... fn directory\n");
 	exit(1);
 }
+#endif
 #endif
