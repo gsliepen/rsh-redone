@@ -27,7 +27,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#define BUFLEN 0x20000
+#define BUFLEN 0x10000
 
 char *argv0;
 
@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
 	
 	struct passwd *pw;
 	
+	int af = AF_UNSPEC;
 	struct addrinfo hint, *ai, *aip, *lai;
 	struct sockaddr raddr;
 	int raddrlen;
@@ -71,7 +72,7 @@ int main(int argc, char **argv) {
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
 
-	char buf[65536][3], *bufp[3];
+	char buf[3][BUFLEN], *bufp[3];
 	int len[3], wlen;
 	
 	fd_set infd, outfd, infdset, outfdset, errfd;
@@ -91,13 +92,19 @@ int main(int argc, char **argv) {
 	
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
+	while((opt = getopt(argc, argv, "+l:p:46")) != -1) {
 		switch(opt) {
 			case 'l':
 				user = optarg;
 				break;
 			case 'p':
 				port = optarg;
+				break;
+			case '4':
+				af = AF_INET;
+				break;
+			case '6':
+				af = AF_INET6;
 				break;
 			default:
 				fprintf(stderr, "%s: Unknown option!\n", argv0);
@@ -117,7 +124,7 @@ int main(int argc, char **argv) {
 	/* Resolve hostname and try to make a connection */
 	
 	memset(&hint, '\0', sizeof(hint));
-	hint.ai_family = AF_UNSPEC;
+	hint.ai_family = af;
 	hint.ai_socktype = SOCK_STREAM;
 	
 	err = getaddrinfo(host, port, &hint, &ai);

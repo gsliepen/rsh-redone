@@ -19,7 +19,7 @@ rsh: rsh.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 rshd: rshd.c
-	$(CC) $(CFLAGS) -lutil -lpam -o $@ $<
+	$(CC) $(CFLAGS) -lpam -o $@ $<
 
 install: $(PROGRAMS)
 	$(INSTALL) -m 4711 rlogin rsh $(DESTDIR)$(BINDIR)/

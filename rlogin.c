@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
 	
 	struct passwd *pw;
 	
+	int af = AF_UNSPEC;
 	struct addrinfo hint, *ai, *aip, *lai;
 	int err, i;
 	
@@ -122,7 +123,7 @@ int main(int argc, char **argv) {
 	struct termios tios, oldtios;
 	char *term, *speed;
 	
-	char buf[65536][2], *bufp[2];
+	char buf[2][BUFLEN], *bufp[2];
 	int len[2], wlen;
 	
 	fd_set infd, outfd, infdset, outfdset, exfd, exfdset;
@@ -144,13 +145,19 @@ int main(int argc, char **argv) {
 	
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
+	while((opt = getopt(argc, argv, "+l:p:46")) != -1) {
 		switch(opt) {
 			case 'l':
 				user = optarg;
 				break;
 			case 'p':
 				port = optarg;
+				break;
+			case '4':
+				af = AF_INET;
+				break;
+			case '6':
+				af = AF_INET6;
 				break;
 			default:
 				fprintf(stderr, "%s: Unknown option!\n", argv0);
@@ -176,7 +183,7 @@ int main(int argc, char **argv) {
 	/* Resolve hostname and try to make a connection */
 	
 	memset(&hint, '\0', sizeof(hint));
-	hint.ai_family = AF_UNSPEC;
+	hint.ai_family = af;
 	hint.ai_socktype = SOCK_STREAM;
 	
 	err = getaddrinfo(host, port, &hint, &ai);
