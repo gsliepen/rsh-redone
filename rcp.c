@@ -548,11 +548,23 @@ int to(char *dname, int preserve, int dir) {
 			break;
 			case 'C':
 			case 'D':
-				while(ring.fill < 10) {
+				offs = 0;
+				for(;;) {
+					s = ringchr(&ring, '\0', offs);
+					if(s)
+						break;
+					offs = ring.fill;
+					if(offs == ring.len)
+						return errno = ENOBUFS, -1;
 					r = ringread(&ring, STDIN_FILENO);
 					if(r <= 0)
 						return -1;
 				}
+				r = ringdist(&ring, s) + 1;
+
+				if(r < 9)
+					return errno = EPROTO, -1;
+
 				mode = 0;
 				for(i = 0; i < 4; i++) {
 					if(++ring.off > ring.len)
@@ -566,32 +578,16 @@ int to(char *dname, int preserve, int dir) {
 				if(++ring.off > ring.len)
 					ring.off = 0;
 				if(ring.buf[ring.off] != ' ')
-					return errno = EINVAL, -1;
+					return errno = EPROTO, -1;
 				if(++ring.off > ring.len)
 					ring.off = 0;
 				ring.fill -= 6;
 
+				size = 0;
 				offs = 0;
 				for(;;) {
-					s = ringchr(&ring, ' ', offs);
-					if(s)
-						break;
-					offs = ring.fill;
-					if(offs > EOVERFLOW)
-						return errno = EINVAL, -1;
-					r = ringread(&ring, STDIN_FILENO);
-					if(r <= 0)
-						return -1;
-				}
-
-				r = ringdist(&ring, s) + 1;
-				if(r == 1)
-					return errno = EPROTO, -1;
-				if(r > 19)
-					return errno = EOVERFLOW, -1;
-
-				size = 0;
-				for(;;) {
+					if(++offs > 19)
+						return errno = EOVERFLOW, -1;
 					c = ring.buf[ring.off];
 					if(c == ' ')
 						break;
@@ -601,22 +597,11 @@ int to(char *dname, int preserve, int dir) {
 					if(++ring.off > ring.len)
 						ring.off = 0;
 				}
+				if(offs == 1) /* just a space */
+					return errno = EPROTO, -1;
 				if(++ring.off > ring.len)
 					ring.off = 0;
-				ring.fill -= r + 1;
-
-				offs = 0;
-				for(;;) {
-					s = ringchr(&ring, '\0', offs);
-					if(s)
-						break;
-					offs = ring.fill;
-					if(offs == ring.len)
-						return errno = ENOBUFS, -1;
-					r = ringread(&ring, STDIN_FILENO);
-					if(r <= 0)
-						return -1;
-				}
+				ring.fill -= offs;
 
 				r = ringdist(&ring, s) + 1;
 				slash[level + 1] = slash[level] + r;
