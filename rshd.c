@@ -36,8 +36,10 @@
 #include <utmp.h>
 #include <grp.h>
 
+char *argv0;
+
 void usage(void) {
-	syslog(LOG_NOTICE, "Usage: rlogind");
+	syslog(LOG_NOTICE, "Usage: %s", argv0);
 }
 
 /* Read until a NULL byte is encountered */
@@ -79,8 +81,6 @@ int main(int argc, char **argv) {
 	char command[1024];
 	char env[1024];
 		
-	int port;
-	
 	struct passwd *pw;
 	
 	int err;
@@ -88,11 +88,13 @@ int main(int argc, char **argv) {
 	char opt;
 
 	char host[NI_MAXHOST];
+	char addr[NI_MAXHOST];
+	char port[NI_MAXSERV];
 	char eport[NI_MAXSERV];
 	char lport[NI_MAXSERV];
-	int eportnr;
+	int portnr, eportnr;
 	
-	struct addrinfo hint, *lai;
+	struct addrinfo hint, *ai, *lai;
 	int esock;
 		
 	int i;
@@ -102,7 +104,9 @@ int main(int argc, char **argv) {
 	const void *item;
 	char *pamuser;
 	
-	openlog(argv[0], LOG_PID, LOG_AUTHPRIV);
+	char *shellname;
+	
+	argv0 = argv[0];
 	
 	/* Process options */
 			
@@ -142,22 +146,17 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+	if((err = getnameinfo(peer, peerlen, addr, sizeof(addr), port, sizeof(port), 0))) {
+		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
+		return 1;
+	}
+	
 	/* Check if connection comes from a privileged port */
 	
-	switch(peer->sa_family) {
-		case AF_INET:
-			port = ntohs(((struct sockaddr_in *)peer)->sin_port);
-			break;
-		case AF_INET6:
-			port = ntohs(((struct sockaddr_in6 *)peer)->sin6_port);
-			break;
-		default:
-			port = -1;
-			break;
-	}
-
-	if(port != -1 && (port < 512 || port >= 1024)) {
-		syslog(LOG_ERR, "Connection from %s on illegal port %d.", host, port);
+	portnr = atoi(port);
+	
+	if(portnr < 512 || portnr >= 1024) {
+		syslog(LOG_ERR, "Connection from %s on illegal port %d.", host, portnr);
 		return 1;
 	}
 	
@@ -171,18 +170,16 @@ int main(int argc, char **argv) {
 	eportnr = atoi(eport);
 	
 	if(eportnr) {
-		switch(peer->sa_family) {
-			case AF_INET:
-				((struct sockaddr_in *)peer)->sin_port = htons(eportnr);
-				break;
-			case AF_INET6:
-				((struct sockaddr_in6 *)peer)->sin6_port = htons(eportnr);
-				break;
-			default:
-				syslog(LOG_ERR, "Unknown addressfamily, can't open stderr socket for %s", host);
-				return 1;
-		}
+		memset(&hint, '\0', sizeof(hint));
+		hint.ai_socktype = SOCK_STREAM;
+		hint.ai_family = peer->sa_family;
 		
+		err = getaddrinfo(addr, eport, &hint, &ai);
+		if(err || !ai) {
+			syslog(LOG_ERR, "Error looking up host: %s", gai_strerror(err));
+			return 1;
+		}
+
 		esock = socket(peer->sa_family, SOCK_STREAM, IPPROTO_TCP);
 		
 		if(esock == -1) {
@@ -190,17 +187,13 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 		
-		memset(&hint, '\0', sizeof(hint));
 		hint.ai_flags = AI_PASSIVE;
-		hint.ai_family = AF_UNSPEC;
-		hint.ai_socktype = SOCK_STREAM;
-		hint.ai_family = peer->sa_family;
 		
 		for(i = 1023; i >= 512; i--) {
 			snprintf(lport, sizeof(lport), "%d", i);
 			err = getaddrinfo(NULL, lport, &hint, &lai);
-			if(err) {
-				fprintf(stderr, " Error looking up localhost: %s\n", gai_strerror(err));
+			if(err || !ai) {
+				syslog(LOG_ERR, "Error looking up localhost: %s", gai_strerror(err));
 				return 1;
 			}
 			
@@ -219,10 +212,12 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 		
-		if(connect(esock, peer, peerlen)) {
+		if(connect(esock, ai->ai_addr, ai->ai_addrlen)) {
 			syslog(LOG_ERR, "Connecting to stderr port %d on %s failed: %m", eportnr, host);
 			return 1;
 		}
+		
+		freeaddrinfo(ai);
 		
 		if(dup2(esock, 2) == -1) {
 			syslog(LOG_ERR, "dup2() failed: %m");
@@ -357,7 +352,15 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	execle(pw->pw_shell, strrchr(pw->pw_shell, '/'), "-c", command, NULL, pam_getenvlist(handle));
+	shellname = strrchr(pw->pw_shell, '/');
+	if(shellname)
+		shellname++;
+	else
+		shellname = pw->pw_shell;				
+	
+	if(strrchr(pw->pw_shell, '/'))
+	
+	execle(pw->pw_shell, shellname, "-c", command, NULL, pam_getenvlist(handle));
 	
 	syslog(LOG_ERR, "Failed to spawn shell: %m");
 	return 1;
