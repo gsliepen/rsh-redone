@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/types.h>
@@ -37,7 +38,7 @@
 char *argv0;
 
 void usage(void) {
-	fprintf(stderr, "Usage: rlogin [-46] [-l user] [-p port] [user@]host\n");
+	fprintf(stderr, "Usage: rlogin [-46v] [-l user] [-p port] [user@]host\n");
 }
 
 /* Make sure everything gets written */
@@ -63,7 +64,7 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 
 /* Safe and fast string building */
 
-void safecpy(char **dest, int *len, char *source, int terminate) {
+void safecpy(char **dest, int *len, char *source, bool terminate) {
 	while(*source && *len) {
 		*(*dest)++ = *source++;
 		(*len)--;
@@ -130,7 +131,10 @@ int main(int argc, char **argv) {
 	
 	int opt;
 
-	int sock = -1, winchsupport = 0;
+	bool verbose = false;
+
+	int sock = -1;
+	bool winchsupport = false;
 
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
@@ -160,7 +164,7 @@ int main(int argc, char **argv) {
 	
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:46")) != -1) {
+	while((opt = getopt(argc, argv, "+l:p:46v")) != -1) {
 		switch(opt) {
 			case 'l':
 				user = optarg;
@@ -173,6 +177,9 @@ int main(int argc, char **argv) {
 				break;
 			case '6':
 				af = AF_INET6;
+				break;
+			case 'v':
+				verbose = true;
 				break;
 			default:
 				fprintf(stderr, "%s: Unknown option!\n", argv0);
@@ -215,10 +222,10 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "%s: Error resolving address: %s\n", argv0, strerror(errno));
 			return 1;
 		}
-		fprintf(stderr, "Trying %s port %s...",	hostaddr, portnr);
+		if(verbose) fprintf(stderr, "Trying %s port %s...",	hostaddr, portnr);
 		
 		if((sock = socket(aip->ai_family, aip->ai_socktype, aip->ai_protocol)) == -1) {
-			fprintf(stderr, " Could not open socket: %s\n", strerror(errno));
+			if(verbose) fprintf(stderr, " Could not open socket: %s\n", strerror(errno));
 			continue;
 		}
 
@@ -245,15 +252,15 @@ int main(int argc, char **argv) {
 		}
 		
 		if(err) {
-			fprintf(stderr, " Could not bind to privileged port: %s\n", strerror(errno));
+			if(verbose) fprintf(stderr, " Could not bind to privileged port: %s\n", strerror(errno));
 			continue;
 		}
 		
 		if(connect(sock, aip->ai_addr, aip->ai_addrlen) == -1) {
-			fprintf(stderr, " Connection failed: %s\n", strerror(errno));
+			if(verbose) fprintf(stderr, " Connection failed: %s\n", strerror(errno));
 			continue;
 		}
-		fprintf(stderr, " Connected.\n");
+		if(verbose) fprintf(stderr, " Connected.\n");
 		break;
 	}
 	
@@ -409,7 +416,7 @@ int main(int argc, char **argv) {
 				break;
 			} else {
 				if(*buf[1] == (char)0x80) {
-					winchsupport = 1;
+					winchsupport = true;
 					sigwinch_h(SIGWINCH);
 				}
 			}
