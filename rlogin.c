@@ -358,13 +358,14 @@ int main(int argc, char **argv) {
 		}
 
 		if(pfd[0].revents) {
+			len = read(0, buf, sizeof(buf));
+			if(len <= 0)
+				break;
+			
 			/* Block SIGWINCH so writes don't interfere with eachother */
 
 			oldmask = sigblock(sigmask(SIGWINCH));
 
-			len = read(0, buf, sizeof(buf));
-			if(len <= 0)
-				break;
 			if(safewrite(sock, buf, len) == -1)
 				break;
 				pfd[0].revents = 0;
@@ -375,10 +376,8 @@ int main(int argc, char **argv) {
 
 	/* Clean up */
 
-	if(errno) {
+	if(errno)
 		fprintf(stderr, "%s: %s\n", argv0, strerror(errno));
-		return 1;
-	}
 	
 	tcsetattr(0, TCSADRAIN, &oldtios);
 	
