@@ -335,6 +335,7 @@ int main(int argc, char **argv) {
 			
 			FD_SET(sock, &outfdset);
 			FD_CLR(0, &infdset);
+			FD_CLR(0, &infd);
 		}
 	}
 
