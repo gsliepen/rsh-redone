@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
 		switch(opt) {
 			case 'l':
-				luser = user = optarg;
+				user = optarg;
 				break;
 			case 'p':
 				port = optarg;
@@ -288,8 +288,13 @@ int main(int argc, char **argv) {
 		outfd = outfdset;
 		errfd = infdset;
 	
-		if(select(maxfd, &infd, &outfd, &errfd, NULL) == 0)
-			break;
+		if(select(maxfd, &infd, &outfd, &errfd, NULL) <= 0) {
+			if(errno == EINTR)
+				continue;
+			else
+				break;
+		}
+
 
 		if(FD_ISSET(esock, &infd)) {
 			len[2] = read(esock, buf[2], BUFLEN);
