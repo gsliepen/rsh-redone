@@ -98,6 +98,7 @@ char *termspeed(speed_t speed) {
 		case B38400: return "38400";
 		case B57600: return "57600";
 		case B115200: return "115200";
+#ifdef B230400
 		case B230400: return "230400";
 		case B460800: return "460800";
 		case B500000: return "500000";
@@ -107,10 +108,13 @@ char *termspeed(speed_t speed) {
 		case B1152000: return "1152000";
 		case B1500000: return "1500000";
 		case B2000000: return "2000000";
+#ifdef B2500000
 		case B2500000: return "2500000";
 		case B3000000: return "3000000";
 		case B3500000: return "3500000";
 		case B4000000: return "4000000";
+#endif
+#endif
 		default: return "9600";
 	}
 }
