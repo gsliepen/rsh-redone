@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
 	struct addrinfo hint, *ai, *aip, *lai;
 	int err, i;
 	
-	char opt;
+	int opt;
 
 	int sock = -1, winchsupport = 0;
 

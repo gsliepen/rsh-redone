@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
 	
 	int err;
 	
-	char opt;
+	int opt;
 
 	char host[NI_MAXHOST];
 	

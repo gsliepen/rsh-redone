@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 	int raddrlen;
 	int err, sock = -1, lsock = -1, esock = -1, i;
 	
-	char opt;
+	int opt;
 
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
