@@ -44,18 +44,17 @@ void usage(void) {
 /* Make sure everything gets written */
 
 ssize_t safewrite(int fd, const void *buf, size_t count) {
-	int written = 0, result;
+	int result;
 	
 	while(count) {
 		result = write(fd, buf, count);
-		if(result == -1)
-			return result;
-		written += result;
+		if(result <= 0)
+			return -1;
 		buf += result;
 		count -= result;
 	}
 	
-	return written;
+	return count;
 }
 
 /* Read until a NULL byte is encountered */
@@ -76,7 +75,8 @@ ssize_t readtonull(int fd, char *buf, size_t count) {
 			return len;
 	}
 	
-	return ENOBUFS;
+	errno = ENOBUFS;
+	return -1;
 }
 
 /* PAM conversation function */
@@ -121,7 +121,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 	for(i = 0; i < msgc; i++) {
 		switch(msgv[i]->msg_style) {
 			case PAM_PROMPT_ECHO_OFF:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
 					return PAM_CONV_ERR;
 				err = conv_read(0, 1, reply, sizeof(reply), 0);
 				if(err <= 0)
@@ -129,7 +129,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 				res[i]->resp = strdup(reply);
 				break;
 			case PAM_PROMPT_ECHO_ON:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
 					return PAM_CONV_ERR;
 				err = conv_read(0, 1, reply, sizeof(reply), 1);
 				if(err <= 0)
@@ -137,15 +137,15 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 				res[i]->resp = strdup(reply);
 				break;
 			case PAM_ERROR_MSG:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
 					return PAM_CONV_ERR;
-				if(safewrite(1, "\n", 1) <= 0)
+				if(safewrite(1, "\n", 1) == -1)
 					return PAM_CONV_ERR;
 				break;
 			case PAM_TEXT_INFO:
 				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
 					return PAM_CONV_ERR;
-				if(safewrite(1, "\n", 1) <= 0)
+				if(safewrite(1, "\n", 1) == -1)
 					return PAM_CONV_ERR;
 				break;
 			default:
@@ -295,7 +295,7 @@ int main(int argc, char **argv) {
 
 	/* Write NULL byte to client so we can give a login prompt if necessary */
 	
-	if(safewrite(1, "", 1) <= 0) {
+	if(safewrite(1, "", 1) == -1) {
 		syslog(LOG_ERR, "Unable to write NULL byte: %m");
 		return 1;
 	}
@@ -426,7 +426,7 @@ int main(int argc, char **argv) {
 						len -= 12;
 					}
 				}
-				if(safewrite(master, buf, len) <= 0)
+				if(safewrite(master, buf, len) == -1)
 					break;
 				pfd[0].revents = 0;
 			}
@@ -435,7 +435,7 @@ int main(int argc, char **argv) {
 				len = read(master, buf, sizeof(buf));
 				if(len <= 0)
 					break;
-				if(safewrite(1, buf, len) <= 0)
+				if(safewrite(1, buf, len) == -1)
 					break;
 				pfd[1].revents = 0;
 			}
