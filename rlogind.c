@@ -175,7 +175,6 @@ int main(int argc, char **argv) {
 	struct passwd *pw;
 	
 	int err;
-	const char *errstr;
 	
 	char opt;
 
@@ -290,6 +289,7 @@ int main(int argc, char **argv) {
 	/* Start PAM */
 	
 	if((err = pam_start("rlogin", luser, &conv, &handle)) != PAM_SUCCESS) {
+		safewrite(1, "Authentication failure\n", 23);
 		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
@@ -319,10 +319,8 @@ int main(int argc, char **argv) {
 	}
 	
 	if(err != PAM_SUCCESS) {
-		errstr = pam_strerror(handle, err);
-		safewrite(1, errstr, strlen(errstr));
-		safewrite(1, "\n", 1);
-		syslog(LOG_ERR, "PAM error: %s", errstr);
+		safewrite(1, "Authentication failure\n", 23);
+		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
 
@@ -331,10 +329,8 @@ int main(int argc, char **argv) {
 	err = pam_acct_mgmt(handle, 0);
 	
 	if(err != PAM_SUCCESS) {
-		errstr = pam_strerror(handle, err);
-		safewrite(1, errstr, strlen(errstr));
-		safewrite(1, "\n", 1);
-		syslog(LOG_ERR, "PAM error: %s", errstr);
+		safewrite(1, "Authentication failure\n", 23);
+		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
 
@@ -343,10 +339,7 @@ int main(int argc, char **argv) {
 	err = pam_get_item(handle, PAM_USER, &item);
 	
 	if(err != PAM_SUCCESS) {
-		errstr = pam_strerror(handle, err);
-		safewrite(1, errstr, strlen(errstr));
-		safewrite(1, "\n", 1);
-		syslog(LOG_ERR, "PAM error: %s", errstr);
+		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
 	
@@ -377,10 +370,7 @@ int main(int argc, char **argv) {
 	err = pam_setcred(handle, PAM_ESTABLISH_CRED);
 	
 	if(err != PAM_SUCCESS) {
-		errstr = pam_strerror(handle, err);
-		safewrite(1, errstr, strlen(errstr));
-		safewrite(1, "\n", 1);
-		syslog(LOG_ERR, "PAM error: %s", errstr);
+		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
 	
