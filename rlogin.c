@@ -269,6 +269,7 @@ int main(int argc, char **argv) {
 	speed = termspeed(cfgetispeed(&tios));
 	
 	bufp[0] = buf[0];
+	*bufp[0]++ = 0;
 	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
 	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
 	strcpy(bufp[0], term); bufp[0] += strlen(term);
