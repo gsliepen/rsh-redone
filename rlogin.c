@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
 	
 	char opt;
 
-    int sock = -1, winchsupport = 0;
+	int sock = -1, winchsupport = 0;
 
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
@@ -286,9 +286,10 @@ int main(int argc, char **argv) {
 	tios.c_lflag &= ~(ECHO|ICANON|ISIG);
 	tios.c_iflag &= ~(ICRNL|ISTRIP|IXON);
 	
-	/* How much of the stuff below is really needed?
 	tios.c_cc[VTIME] = 1;
 	tios.c_cc[VMIN] = 1;
+	
+	/* How much of the stuff below is really needed?
 	tios.c_cc[VSUSP] = 255;
 	tios.c_cc[VEOL] = 255;
 	tios.c_cc[VREPRINT] = 255;
