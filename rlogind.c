@@ -382,11 +382,6 @@ int main(int argc, char **argv) {
 		
 		int on = 1;
 		close(slave);
-		/* WTF doet dit?
-		ioctl(0, FIONBIO, &on);
-		ioctl(master, FIONBIO, &on);
-		ioctl(master, TIOCPKT, &on);
-		*/
 
 		/* Process input/output */
 
