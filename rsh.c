@@ -26,6 +26,8 @@
 #include <string.h>
 #include <errno.h>
 
+#define BUFLEN 0x10000
+
 char *argv0;
 
 void usage(void) {
@@ -68,8 +70,8 @@ int main(int argc, char **argv) {
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
 
-	char buf[4096];
-	int len;
+	char *buf[3];
+	int len[3], wlen;
 	
 	fd_set infd, outfd, infdset, outfdset, errfd;
 	int maxfd;
@@ -268,6 +270,14 @@ int main(int argc, char **argv) {
 	
 	/* Process input/output */
 
+	for(i = 0; i < 3; i++) {
+		buf[i] = malloc(BUFLEN);
+		if(!buf[i]) {
+			fprintf(stderr, "%s: Could not allocate buffers: %s\n", argv0, strerror(errno));
+			return 1;
+		}
+	}
+	
 	FD_ZERO(&infdset);
 	FD_ZERO(&outfdset);
 	FD_SET(0, &infdset);
@@ -288,28 +298,90 @@ int main(int argc, char **argv) {
 		}
 
 		if(FD_ISSET(esock, &infd)) {
-			len = read(esock, buf, sizeof(buf));
-			if(len <= 0) {
+			len[2] = read(esock, buf[2], BUFLEN);
+			if(len[2] <= 0) {
 				if(FD_ISSET(sock, &infdset))
 					FD_CLR(esock, &infdset);
 				else
 					break;
-			} else
-				if(safewrite(2, buf, len) == -1)
+			} else {
+				FD_SET(1, &outfdset);
+				FD_CLR(esock, &infdset);
+			}
+		}
+
+		if(FD_ISSET(1, &outfd)) {
+			wlen = write(1, buf[2], len[2]);
+			if(wlen <= 0) {
+				if(FD_ISSET(sock, &infdset))
+					FD_CLR(esock, &infdset);
+				else
 					break;
+			} else {
+				len[2] -= wlen;
+				buf[2] += wlen;
+				if(!len[2]) {
+					FD_CLR(1, &outfdset);
+					FD_SET(esock, &infdset);
+				}
+			}
 		}
 
 		if(FD_ISSET(sock, &infd)) {
-			len = read(sock, buf, sizeof(buf));
-			if(len <= 0) {
+			len[1] = read(sock, buf[1], BUFLEN);
+			if(len[1] <= 0) {
 				if(FD_ISSET(esock, &infdset))
 					FD_CLR(sock, &infdset);
 				else
 					break;
-			} else
-				if(safewrite(1, buf, len) == -1)
-					break;
+			} else {
+				FD_SET(0, &outfdset);
+				FD_CLR(sock, &infdset);
+			}
 		}
+
+		if(FD_ISSET(0, &outfd)) {
+			wlen = write(0, buf[1], len[1]);
+			if(wlen <= 0) {
+				if(FD_ISSET(esock, &infdset))
+					FD_CLR(sock, &infdset);
+				else
+					break;
+			} else {
+				len[1] -= wlen;
+				buf[1] += wlen;
+				if(!len[1]) {
+					FD_CLR(0, &outfdset);
+					FD_SET(sock, &infdset);
+				}
+			}
+		}
+
+		if(FD_ISSET(0, &infd)) {
+			len[0] = read(0, buf[0], BUFLEN);
+			if(len[0] <= 0) {
+				break;
+			} else {
+				FD_SET(sock, &outfdset);
+				FD_CLR(0, &infdset);
+			}
+		}
+
+		if(FD_ISSET(sock, &outfd)) {
+			wlen = write(sock, buf[0], len[0]);
+			if(wlen <= 0) {
+					break;
+			} else {
+				len[0] -= wlen;
+				buf[0] += wlen;
+				if(!len[0]) {
+					FD_CLR(sock, &outfdset);
+					FD_SET(0, &infdset);
+				}
+			}
+		}
+
+		
 	}
 		
 	if(errno) {
