@@ -94,16 +94,19 @@ ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
 		count--;
 				
 		if(*buf == '\r') {
-			write(outfd, "\n\r", 2);
+			if(write(outfd, "\n\r", 2) <= 0)
+				return -1;
 			*buf = '\0';
 			return len;
 		}
 		
 		if(echo)
-			write(outfd, buf++, 1);
+			if(write(outfd, buf++, 1) <= 0)
+				return -1;
 	}
 	
-	return ENOBUFS;
+	errno = ENOBUFS;	
+	return -1;
 }
 
 int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res, void *app) {
@@ -118,24 +121,32 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 	for(i = 0; i < msgc; i++) {
 		switch(msgv[i]->msg_style) {
 			case PAM_PROMPT_ECHO_OFF:
-				write(1, msgv[i]->msg, strlen(msgv[i]->msg));
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+					return PAM_CONV_ERR;
 				err = conv_read(0, 1, reply, sizeof(reply), 0);
 				if(err <= 0)
 					return PAM_CONV_ERR;
 				res[i]->resp = strdup(reply);
 				break;
 			case PAM_PROMPT_ECHO_ON:
-				write(1, msgv[i]->msg, strlen(msgv[i]->msg));
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+					return PAM_CONV_ERR;
 				err = conv_read(0, 1, reply, sizeof(reply), 1);
+				if(err <= 0)
+					return PAM_CONV_ERR;
 				res[i]->resp = strdup(reply);
 				break;
 			case PAM_ERROR_MSG:
-				write(1, msgv[i]->msg, strlen(msgv[i]->msg));
-				write(1, "\n", 1);
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+					return PAM_CONV_ERR;
+				if(safewrite(1, "\n", 1) <= 0)
+					return PAM_CONV_ERR;
 				break;
 			case PAM_TEXT_INFO:
-				write(1, msgv[i]->msg, strlen(msgv[i]->msg));
-				write(1, "\n", 1);
+				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
+					return PAM_CONV_ERR;
+				if(safewrite(1, "\n", 1) <= 0)
+					return PAM_CONV_ERR;
 				break;
 			default:
 				return PAM_CONV_ERR;
@@ -284,7 +295,10 @@ int main(int argc, char **argv) {
 
 	/* Write NULL byte to client so we can give a login prompt if necessary */
 	
-	write(1, "", 1);
+	if(safewrite(1, "", 1) <= 0) {
+		syslog(LOG_ERR, "Unable to write NULL byte: %m");
+		return 1;
+	}
 	
 	/* Try to authenticate */
 	
@@ -412,7 +426,8 @@ int main(int argc, char **argv) {
 						len -= 12;
 					}
 				}
-				safewrite(master, buf, len);
+				if(safewrite(master, buf, len) <= 0)
+					break;
 				pfd[0].revents = 0;
 			}
 
@@ -420,7 +435,8 @@ int main(int argc, char **argv) {
 				len = read(master, buf, sizeof(buf));
 				if(len <= 0)
 					break;
-				safewrite(1, buf, len);
+				if(safewrite(1, buf, len) <= 0)
+					break;
 				pfd[1].revents = 0;
 			}
 		}
