@@ -32,6 +32,8 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
+#define BUFLEN 0x10000
+
 char *argv0;
 int sock = -1, winchsupport = 0;
 
@@ -99,26 +101,6 @@ char *termspeed(speed_t speed) {
 	}
 }
 
-/* Catch SIGWINCH */
-
-void sigwinch_h(int signal) {
-	char buf[12];
-	struct winsize winsize;
-	
-	if(winchsupport) {
-		buf[0] = buf[1] = (char)0xFF;
-		buf[2] = buf[3] = 's';
-
-		ioctl(0, TIOCGWINSZ, &winsize);
-		*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
-		*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
-		*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
-		*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
-
-		safewrite(sock, buf, 12);
-	}
-}
-
 int main(int argc, char **argv) {
 	char *user = NULL;
 	char *luser = NULL;
@@ -139,10 +121,11 @@ int main(int argc, char **argv) {
 	struct termios tios, oldtios;
 	char *term, *speed;
 	
-	char buf[4096];
-	int len;
+	char buf[65536][2], *bufp[2];
+	int len[2], wlen;
 	
-	struct pollfd pfd[2];
+	fd_set infd, outfd, infdset, outfdset, exfd, exfdset;
+	int maxfd;
 	
 	int oldmask;
 	
@@ -288,7 +271,7 @@ int main(int argc, char **argv) {
 	
 	errno = 0;
 	
-	if(read(sock, buf, 1) != 1 || *buf) {
+	if(read(sock, buf[0], 1) != 1 || *buf[0]) {
 		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv0, strerror(errno));
 		return 1;
 	}
@@ -314,64 +297,131 @@ int main(int argc, char **argv) {
 
 	tcsetattr(0, TCSADRAIN, &tios);
 
+	/* Process input/output */
+	
+	bufp[0] = buf[0];
+	bufp[1] = buf[1];
+	
+	maxfd = sock + 1;
+	
+	FD_ZERO(&infdset);
+	FD_ZERO(&outfdset);
+	FD_ZERO(&exfdset);
+	FD_SET(0, &infdset);
+	FD_SET(sock, &infdset);
+	FD_SET(sock, &exfdset);
+
 	/* Handle SIGWINCH */
 	
+	void sigwinch_h(int signal) {
+		char wbuf[12];
+		struct winsize winsize;
+
+		if(winchsupport) {
+			wbuf[0] = wbuf[1] = (char)0xFF;
+			wbuf[2] = wbuf[3] = 's';
+
+			ioctl(0, TIOCGWINSZ, &winsize);
+			*(uint16_t *)(wbuf + 4) = htons(winsize.ws_row);
+			*(uint16_t *)(wbuf + 6) = htons(winsize.ws_col);
+			*(uint16_t *)(wbuf + 8) = htons(winsize.ws_xpixel);
+			*(uint16_t *)(wbuf + 10) = htons(winsize.ws_ypixel);
+
+			if(bufp[0] == buf[0])
+				len[0] = 0;
+			
+			memcpy(bufp[0] + len[0], wbuf, 12);
+			len[0] += 12;
+			
+			FD_SET(sock, &outfdset);
+			FD_CLR(0, &infdset);
+		}
+	}
+
 	if(signal(SIGWINCH, sigwinch_h) == SIG_ERR) {
 		fprintf(stderr, "%s: signal() failed: %s\n", argv0, strerror(errno));
 		return 1;
 	}
 	
-	/* Process input/output */
-	
-	pfd[0].fd = 0;
-	pfd[0].events = POLLIN | POLLERR | POLLHUP;
-	pfd[1].fd = sock;
-	pfd[1].events = POLLIN | POLLERR | POLLHUP | POLLPRI;
-
 	for(;;) {
 		errno = 0;
+		infd = infdset;
+		outfd = outfdset;
+		exfd = exfdset;
 		
-		if(poll(pfd, 2, -1) == -1) {
+		if(select(maxfd, &infd, &outfd, &exfd, NULL) <= 0) {
 			if(errno == EINTR)
 				continue;
-			break;
+			else
+				break;
 		}
+
+		oldmask = sigblock(sigmask(SIGWINCH));
 		
-		if(pfd[1].revents) {
-			if(pfd[1].revents & POLLPRI) {
-				len = recv(sock, buf, 1, MSG_OOB);
-				if(len <= 0)
-					break;
-				if(*buf == (char)0x80) {
+		if(FD_ISSET(sock, &exfd)) {
+			len[1] = recv(sock, buf[1], 1, MSG_OOB);
+			if(len[1] <= 0) {
+				break;
+			} else {
+				if(*buf[1] == (char)0x80) {
 					winchsupport = 1;
 					sigwinch_h(SIGWINCH);
 				}
 			}
-			if(pfd[1].revents & ~POLLPRI) {
-				len = read(sock, buf, sizeof(buf));
-				if(len <= 0)
-					break;
-				if(safewrite(1, buf, len) == -1)
-					break;
+		}
+
+		if(FD_ISSET(sock, &infd)) {
+			len[1] = read(sock, buf[1], BUFLEN);
+			if(len[1] <= 0) {
+				break;
+			} else {
+				FD_SET(1, &outfdset);
+				FD_CLR(sock, &infdset);
 			}
-			pfd[1].revents = 0;
 		}
 
-		if(pfd[0].revents) {
-			len = read(0, buf, sizeof(buf));
-			if(len <= 0)
+		if(FD_ISSET(1, &outfd)) {
+			wlen = write(1, bufp[1], len[1]);
+			if(wlen <= 0) {
 				break;
-			
-			/* Block SIGWINCH so writes don't interfere with eachother */
-
-			oldmask = sigblock(sigmask(SIGWINCH));
-
-			if(safewrite(sock, buf, len) == -1)
-				break;
-				pfd[0].revents = 0;
-
-			sigsetmask(oldmask);
+			} else {
+				len[1] -= wlen;
+				bufp[1] += wlen;
+				if(!len[1]) {
+					FD_CLR(1, &outfdset);
+					FD_SET(sock, &infdset);
+					bufp[1] = buf[1];
+				}
+			}
 		}
+
+		if(FD_ISSET(0, &infd)) {
+			len[0] = read(0, buf[0], BUFLEN);
+			if(len[0] <= 0) {
+				FD_CLR(0, &infdset);
+				shutdown(sock, SHUT_WR);
+			} else {
+				FD_SET(sock, &outfdset);
+				FD_CLR(0, &infdset);
+			}
+		}
+
+		if(FD_ISSET(sock, &outfd)) {
+			wlen = write(sock, bufp[0], len[0]);
+			if(wlen <= 0) {
+					break;
+			} else {
+				len[0] -= wlen;
+				bufp[0] += wlen;
+				if(!len[0]) {
+					FD_CLR(sock, &outfdset);
+					FD_SET(0, &infdset);
+					bufp[0] = buf[0];
+				}
+			}
+		}
+
+		sigsetmask(oldmask);
 	}
 
 	/* Clean up */
