@@ -1,0 +1,36 @@
+.Dd Sun, 13 Apr 2003 00:24:32 +0200
+.Dt RSH 1
+.Sh NAME
+.Nm rsh
+.Nd remote shell
+.Sh SYNOPSIS
+.Nm
+.Op Fl l Ar user
+.Op Fl p Ar port
+.Ar host
+.Op command
+.Sh DESCRIPTION
+.Nm
+makes a connection to the remote shell daemon running on
+.Ar host
+and starts
+.Ar command
+on the remote machine.
+All input is transmitted to the remote machine and all
+output on the remote machine is sent back to the
+.Nm
+client on the local machine.
+.Sh OPTIONS
+.Bl -tag -width flag
+.It Fl l Ar user
+Connect to the remote machine as a different user than on the local machine.
+.It Fl p Ar port
+Connect to a different port than the default one for
+.Nm .
+.El
+.Sh SEE ALSO
+.Xr rshd 8 ,
+.Xr rlogin 1 ,
+.Xr rlogind 8 ,
+.Xr rcp 1 ,
+.Xr rhosts 5 .
