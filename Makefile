@@ -1,7 +1,7 @@
-PROGRAMS = rlogin rlogind rsh
+PROGRAMS = rlogin rlogind rsh rshd
 
 CC ?= gcc
-CFLAGS ?= -Wall -g
+CFLAGS ?= -Wall -g -O2 -pipe
 PREFIX ?= /usr
 INSTALL ?= install
 BINDIR = $(PREFIX)/bin
@@ -18,10 +18,12 @@ rlogind: rlogind.c
 rsh: rsh.c
 	$(CC) $(CFLAGS) -o $@ $<
 
+rshd: rshd.c
+	$(CC) $(CFLAGS) -lutil -lpam -o $@ $<
+
 install: $(PROGRAMS)
-	$(INSTALL) rsh $(DESTDIR)$(BINDIR)/
-	$(INSTALL) -m 4711 rlogin $(DESTDIR)$(BINDIR)/
-	$(INSTALL) rlogind $(DESTDIR)$(SBINDIR)/
+	$(INSTALL) -m 4711 rlogin rsh $(DESTDIR)$(BINDIR)/
+	$(INSTALL) rlogind rshd $(DESTDIR)$(SBINDIR)/
 
 clean:
 	rm -f $(PROGRAMS)

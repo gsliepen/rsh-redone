@@ -28,8 +28,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
-#include <termios.h>
-#include <signal.h>
+#include <syslog.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <security/pam_appl.h>
@@ -39,22 +38,6 @@
 
 void usage(void) {
 	syslog(LOG_NOTICE, "Usage: rlogind");
-}
-
-/* Make sure everything gets written */
-
-ssize_t safewrite(int fd, const void *buf, size_t count) {
-	int result;
-	
-	while(count) {
-		result = write(fd, buf, count);
-		if(result <= 0)
-			return -1;
-		buf += result;
-		count -= result;
-	}
-	
-	return count;
 }
 
 /* Read until a NULL byte is encountered */
@@ -81,84 +64,9 @@ ssize_t readtonull(int fd, char *buf, size_t count) {
 
 /* PAM conversation function */
 
-ssize_t conv_read(int infd, int outfd, char *buf, size_t count, int echo) {
-	int len = 0, result;
-	
-	while(count) {
-		result = read(infd, buf, 1);
-		
-		if(result <= 0)
-			return result;
-
-		if(!*buf)
-			continue;
-		
-		len++;
-		count--;
-		
-		if(*buf == '\r') {
-			if(write(outfd, "\n\r", 2) <= 0)
-				return -1;
-			*buf = '\0';
-			return len;
-		}
-		
-		if(echo)
-			if(write(outfd, buf, 1) <= 0)
-				return -1;
-		
-		buf++;
-	}
-	
-	errno = ENOBUFS;	
-	return -1;
-}
-
 int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res, void *app) {
-	int i, err;
-	char reply[1024];
-	
-	*res = malloc(sizeof(*reply) * msgc);
-	if(!*res)
-		return PAM_CONV_ERR;
-	memset(*res, '\0', sizeof(*reply) * msgc);
-	
-	for(i = 0; i < msgc; i++) {
-		switch(msgv[i]->msg_style) {
-			case PAM_PROMPT_ECHO_OFF:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
-					return PAM_CONV_ERR;
-				err = conv_read(0, 1, reply, sizeof(reply), 0);
-				if(err <= 0)
-					return PAM_CONV_ERR;
-				res[i]->resp = strdup(reply);
-				break;
-			case PAM_PROMPT_ECHO_ON:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
-					return PAM_CONV_ERR;
-				err = conv_read(0, 1, reply, sizeof(reply), 1);
-				if(err <= 0)
-					return PAM_CONV_ERR;
-				res[i]->resp = strdup(reply);
-				break;
-			case PAM_ERROR_MSG:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) == -1)
-					return PAM_CONV_ERR;
-				if(safewrite(1, "\n", 1) == -1)
-					return PAM_CONV_ERR;
-				break;
-			case PAM_TEXT_INFO:
-				if(safewrite(1, msgv[i]->msg, strlen(msgv[i]->msg)) <= 0)
-					return PAM_CONV_ERR;
-				if(safewrite(1, "\n", 1) == -1)
-					return PAM_CONV_ERR;
-				break;
-			default:
-				return PAM_CONV_ERR;
-		}
-	}
-	
-	return PAM_SUCCESS;
+	syslog(LOG_ERR, "PAM requires conversation");
+	return PAM_CONV_ERR;
 }
 
 int main(int argc, char **argv) {
@@ -168,7 +76,8 @@ int main(int argc, char **argv) {
 	
 	char user[1024];
 	char luser[1024];
-	char term[1024];
+	char command[1024];
+	char env[1024];
 		
 	int port;
 	
@@ -179,25 +88,21 @@ int main(int argc, char **argv) {
 	char opt;
 
 	char host[NI_MAXHOST];
+	char eport[NI_MAXSERV];
+	char lport[NI_MAXSERV];
+	int eportnr;
 	
-	char buf[4096];
-	int len;
-	
-	struct pollfd pfd[3];
-	
-	struct winsize winsize;
-	uint16_t winbuf[4];
+	struct addrinfo hint, *lai;
+	int esock;
+		
 	int i;
-	
-	int master, slave;
-	char *tty;
 
 	pam_handle_t *handle;		
 	struct pam_conv conv = {conv_h, NULL};
 	const void *item;
 	char *pamuser;
 	
-	int pid;
+	openlog(argv[0], LOG_PID, LOG_AUTHPRIV);
 	
 	/* Process options */
 			
@@ -256,11 +161,73 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	/* Wait for NULL byte */
+	/* Read port number for stderr socket */
 	
-	if(read(0, buf, 1) != 1 || *buf) {
-		syslog(LOG_ERR, "Didn't receive NULL byte from %s: %m\n", host);
+	if(readtonull(0, eport, sizeof(eport)) <= 0) {
+		syslog(LOG_ERR, "Error while receiving stderr port number from %s: %m", host);
 		return 1;
+	}
+	
+	eportnr = atoi(eport);
+	
+	if(eportnr) {
+		switch(peer->sa_family) {
+			case AF_INET:
+				((struct sockaddr_in *)peer)->sin_port = htons(eportnr);
+				break;
+			case AF_INET6:
+				((struct sockaddr_in6 *)peer)->sin6_port = htons(eportnr);
+				break;
+			default:
+				syslog(LOG_ERR, "Unknown addressfamily, can't open stderr socket for %s", host);
+				return 1;
+		}
+		
+		esock = socket(peer->sa_family, SOCK_STREAM, IPPROTO_TCP);
+		
+		if(esock == -1) {
+			syslog(LOG_ERR, "socket() failed: %m");
+			return 1;
+		}
+		
+		memset(&hint, '\0', sizeof(hint));
+		hint.ai_flags = AI_PASSIVE;
+		hint.ai_family = AF_UNSPEC;
+		hint.ai_socktype = SOCK_STREAM;
+		hint.ai_family = peer->sa_family;
+		
+		for(i = 1023; i >= 512; i--) {
+			snprintf(lport, sizeof(lport), "%d", i);
+			err = getaddrinfo(NULL, lport, &hint, &lai);
+			if(err) {
+				fprintf(stderr, " Error looking up localhost: %s\n", gai_strerror(err));
+				return 1;
+			}
+			
+			err = bind(esock, lai->ai_addr, lai->ai_addrlen);
+			
+			freeaddrinfo(lai);
+			
+			if(err)
+				continue;
+			else
+				break;
+		}
+		
+		if(err) {
+			syslog(LOG_ERR, "Could not bind to privileged port: %m");
+			return 1;
+		}
+		
+		if(connect(esock, peer, peerlen)) {
+			syslog(LOG_ERR, "Connecting to stderr port %d on %s failed: %m", eportnr, host);
+			return 1;
+		}
+		
+		if(dup2(esock, 2) == -1) {
+			syslog(LOG_ERR, "dup2() failed: %m");
+			return 1;
+		}
 	}
 
 	/* Read usernames and terminal info */
@@ -270,26 +237,17 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if(readtonull(0, term, sizeof(term)) <= 0) {
-		syslog(LOG_ERR, "Error while receiving terminal from %s: %m", host);
+	if(readtonull(0, command, sizeof(command)) <= 0) {
+		syslog(LOG_ERR, "Error while receiving command from %s: %m", host);
 		return 1;
 	}
 	
 	syslog(LOG_NOTICE, "Connection from %s@%s for %s", user, host, luser);
 	
-	/* We need to have a pty before we can use PAM */
-	
-	if(openpty(&master, &slave, 0, 0, &winsize) != 0) {
-		syslog(LOG_ERR, "Could not open pty: %m");
-		return 1;
-	}
-	
-	tty = ttyname(slave);
-
 	/* Start PAM */
 	
-	if((err = pam_start("rlogin", luser, &conv, &handle)) != PAM_SUCCESS) {
-		safewrite(1, "Authentication failure\n", 23);
+	if((err = pam_start("rsh", luser, &conv, &handle)) != PAM_SUCCESS) {
+		write(1, "Authentication failure\n", 23);
 		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
@@ -297,11 +255,10 @@ int main(int argc, char **argv) {
 	pam_set_item(handle, PAM_USER, luser);
 	pam_set_item(handle, PAM_RUSER, user);
 	pam_set_item(handle, PAM_RHOST, host);
-	pam_set_item(handle, PAM_TTY, tty);
 
 	/* Write NULL byte to client so we can give a login prompt if necessary */
 	
-	if(safewrite(1, "", 1) == -1) {
+	if(write(1, "", 1) <= 0) {
 		syslog(LOG_ERR, "Unable to write NULL byte: %m");
 		return 1;
 	}
@@ -319,7 +276,7 @@ int main(int argc, char **argv) {
 	}
 	
 	if(err != PAM_SUCCESS) {
-		safewrite(1, "Authentication failure\n", 23);
+		write(1, "Authentication failure\n", 23);
 		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
@@ -329,7 +286,7 @@ int main(int argc, char **argv) {
 	err = pam_acct_mgmt(handle, 0);
 	
 	if(err != PAM_SUCCESS) {
-		safewrite(1, "Authentication failure\n", 23);
+		write(1, "Authentication failure\n", 23);
 		syslog(LOG_ERR, "PAM error: %s", pam_strerror(handle, err));
 		return 1;
 	}
@@ -376,131 +333,32 @@ int main(int argc, char **argv) {
 	
 	/* Authentication succeeded */
 	
-	pam_end(handle, PAM_SUCCESS);
-	
-	/* spawn login shell */
-	
-	if((pid = fork()) < 0) {
-		syslog(LOG_ERR, "fork() failed: %m");
+	if(setuid(pw->pw_uid)) {
+		syslog(LOG_ERR, "setuid() failed: %m");
 		return 1;
 	}
 	
-	if(send(1, "\x80", 1, MSG_OOB) <= 0) {
-		syslog(LOG_ERR, "Unable to write OOB \x80: %m");
+	if(!pw->pw_shell || !*pw->pw_shell) {
+		syslog(LOG_ERR, "No shell for %s", pamuser);
 		return 1;
 	}
 	
-	if(pid) {
-		/* Parent process, still the rlogin server */
-		
-		close(slave);
-
-		/* Process input/output */
-
-		pfd[0].fd = 0;
-		pfd[0].events = POLLIN | POLLERR | POLLHUP;
-		pfd[1].fd = master;
-		pfd[1].events = POLLIN | POLLERR | POLLHUP;
-		
-		for(;;) {
-			errno = 0;
-
-			if(poll(pfd, 2, -1) == -1) {
-				if(errno == EINTR)
-					continue;
-				break;
-			}
-
-			if(pfd[0].revents) {
-				len = read(0, buf, sizeof(buf));
-				if(len <= 0)
-					break;
-
-				/* Scan for control messages. Yes this is evil and should be done differently. */
-				
-				for(i = 0; i < len - 11;) {
-					if(buf[i++] == (char)0xFF)
-					if(buf[i++] == (char)0xFF)
-					if(buf[i++] == 's')
-					if(buf[i++] == 's') {
-						memcpy(winbuf, buf + i, 8);
-						winsize.ws_row = ntohs(winbuf[0]);
-						winsize.ws_col = ntohs(winbuf[1]);
-						winsize.ws_xpixel = ntohs(winbuf[2]);
-						winsize.ws_ypixel = ntohs(winbuf[3]);
-						if(ioctl(master, TIOCSWINSZ, &winsize) == -1)
-							break;
-						memcpy(buf + i - 4, buf + i + 8, len - i - 8);
-						i -= 4;
-						len -= 12;
-					}
-				}
-				
-				if(safewrite(master, buf, len) == -1)
-					break;
-				pfd[0].revents = 0;
-			}
-
-			if(pfd[1].revents) {
-				len = read(master, buf, sizeof(buf));
-				if(len <= 0) {
-					errno = 0;
-					break;
-				}
-				if(safewrite(1, buf, len) == -1)
-					break;
-				pfd[1].revents = 0;
-			}
-		}
-
-		/* The end */
-		
-		if(errno) {
-			syslog(LOG_NOTICE, "Closing connection with %s@%s: %m", user, host);
-			return 1;
-		} else {
-			syslog(LOG_NOTICE, "Closing connection with %s@%s", user, host);
-			return 0;
-		}
-		
-		close(master);
-	} else {
-		/* Child process, will become the shell */
-		
-		char *speed;
-		struct termios tios;
-		char *envp[2];
-
-		/* Prepare tty for login */
-
-		close(master);
-		if(login_tty(slave)) {
-			syslog(LOG_ERR, "login_tty() failed: %m");
-			return 1;
-		}
-
-		/* Fix terminal type and speed */
-		
-		tcgetattr(0, &tios);
-
-		if((speed = strchr(term, '/'))) {
-			*speed++ = '\0';
-			cfsetispeed(&tios, atoi(speed));
-			cfsetospeed(&tios, atoi(speed));
-		}
-		
-		tcsetattr(0, TCSADRAIN, &tios);
-
-		/* Create environment */
-
-		asprintf(&envp[0], "TERM=%s", term);
-		envp[1] = NULL;
-
-		/* Spawn login process */
-		
-		execle("/bin/login", "login", "-p", "-h", host, "-f", pamuser, NULL, envp);
-
-		syslog(LOG_ERR, "Failed to spawn login process: %m");
+	/* Set some environment variables PAM doesn't set */
+	
+	snprintf(env, sizeof(env), "USER=%s", pamuser);
+	pam_putenv(handle, env);
+	snprintf(env, sizeof(env), "SHELL=%s", pw->pw_shell);
+	pam_putenv(handle, env);
+	
+	/* Run command */
+	
+	if(chdir(pw->pw_dir) && chdir("/")) {
+		syslog(LOG_DEBUG, "chdir() failed: %m");
 		return 1;
 	}
+	
+	execle(pw->pw_shell, strrchr(pw->pw_shell, '/'), "-c", command, NULL, pam_getenvlist(handle));
+	
+	syslog(LOG_ERR, "Failed to spawn shell: %m");
+	return 1;
 }

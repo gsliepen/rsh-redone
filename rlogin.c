@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
 	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
 		switch(opt) {
 			case 'l':
-				luser = user = optarg;
+				user = optarg;
 				break;
 			case 'p':
 				port = optarg;
@@ -258,12 +258,12 @@ int main(int argc, char **argv) {
 	
 	speed = termspeed(cfgetispeed(&tios));
 	
-	if(safewrite(sock, "", 1) <= 0 || 
-	   safewrite(sock, luser, strlen(luser) + 1) <= 0 ||
-	   safewrite(sock, user, strlen(user) + 1) <= 0 ||
-	   safewrite(sock, term, strlen(term)) <= 0 ||
-	   safewrite(sock, "/", 1) <= 0 ||
-	   safewrite(sock, speed, strlen(speed) + 1) <= 0) {
+	if(safewrite(sock, "", 1) == -1 || 
+	   safewrite(sock, luser, strlen(luser) + 1) == -1 ||
+	   safewrite(sock, user, strlen(user) + 1) == -1 ||
+	   safewrite(sock, term, strlen(term)) == -1 ||
+	   safewrite(sock, "/", 1) == -1 ||
+	   safewrite(sock, speed, strlen(speed) + 1) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
 		return 1;
 	}
@@ -328,38 +328,6 @@ int main(int argc, char **argv) {
 			break;
 		}
 
-		if(pfd[0].revents) {
-			len = read(0, buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			if(safewrite(sock, buf, len) <= 0)
-				break;
-			pfd[0].revents = 0;
-		}
-
-		if(pfd[1].revents) {
-			if(pfd[1].revents & POLLPRI) {
-				len = recv(sock, buf, 1, MSG_OOB);
-				if(len <= 0)
-					break;
-				if(*buf == (char)0x80) {
-					winchsupport = 1;
-					if(write(winchpipe[1], "", 1) <= 0){
-						fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
-						return 1;
-					}
-				}
-			}
-			if(pfd[1].revents & ~POLLPRI) {
-				len = read(sock, buf, sizeof(buf));
-				if(len <= 0)
-					break;
-				if(safewrite(1, buf, len) <= 0)
-					break;
-			}
-			pfd[1].revents = 0;
-		}
-
 		/* If we got a SIGWINCH, send new window size to server */
 		
 		if(pfd[2].revents) {
@@ -377,20 +345,56 @@ int main(int argc, char **argv) {
 				*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
 				*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
 
-				if(safewrite(sock, buf, 12) <= 0)
+				if(safewrite(sock, buf, 12) == -1)
 					break;
 			}
 
 			pfd[1].revents = 0;
 		}
+
+		if(pfd[1].revents) {
+			if(pfd[1].revents & POLLPRI) {
+				len = recv(sock, buf, 1, MSG_OOB);
+				if(len <= 0)
+					break;
+				if(*buf == (char)0x80) {
+					winchsupport = 1;
+					if(safewrite(winchpipe[1], "", 1) == -1){
+						fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
+						return 1;
+					}
+				}
+			}
+			if(pfd[1].revents & ~POLLPRI) {
+				len = read(sock, buf, sizeof(buf));
+				if(len <= 0)
+					break;
+				if(safewrite(1, buf, len) == -1)
+					break;
+			}
+			pfd[1].revents = 0;
+		}
+
+		if(pfd[0].revents) {
+			len = read(0, buf, sizeof(buf));
+			if(len <= 0)
+				break;
+			if(safewrite(sock, buf, len) == -1)
+				break;
+			pfd[0].revents = 0;
+		}
 	}
 
 	/* Clean up */
 
-	tcsetattr(0, TCSADRAIN, &oldtios);
-
-	if(errno)
+	if(errno) {
 		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
 	
+	tcsetattr(0, TCSADRAIN, &oldtios);
+	
+	close(sock);
+
 	return 0;
 }

@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
 	while((opt = getopt(argc, argv, "+l:p:")) != -1) {
 		switch(opt) {
 			case 'l':
-				luser = user = optarg;
+				user = optarg;
 				break;
 			case 'p':
 				port = optarg;
@@ -210,18 +210,38 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+	/* Drop privileges */
+	
+	if(setuid(getuid())) {
+		fprintf(stderr, "%s: Unable to drop privileges: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	
 	/* Send required information to the server */
 	
-	safewrite(sock, lport, strlen(lport) + 1);
-	safewrite(sock, luser, strlen(luser) + 1);
-	safewrite(sock, user, strlen(user) + 1);
+	if(safewrite(sock, lport, strlen(lport) + 1) == -1 || 
+	   safewrite(sock, luser, strlen(luser) + 1) == -1 ||
+	   safewrite(sock, user, strlen(user) + 1) == -1) {
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
 
 	for(; optind < argc; optind++) {
-		safewrite(sock, argv[optind], strlen(argv[optind]));
+		if(safewrite(sock, argv[optind], strlen(argv[optind])) == -1) {
+			fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+			return 1;
+		}
 		if(optind < argc - 1)
-			safewrite(sock, " ", 1);
+			if(safewrite(sock, " ", 1) == -1) {
+				fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+				return 1;
+			}
 	}
-	safewrite(sock, "", 1);
+
+	if(safewrite(sock, "", 1) == -1) {
+		fprintf(stderr, "%s: Unable to send required information: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
 
 	/* Wait for acknowledgement from server */
 	
@@ -258,36 +278,41 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
-		if(pfd[0].revents) {
-			len = read(0, buf, sizeof(buf));
-			if(len <= 0) {
-				fprintf(stderr, "%s: Error while reading from stdin: %s\n", argv[0], strerror(errno));
-				return 1;
-			}
-			safewrite(sock, buf, len);
-			pfd[0].revents = 0;
-		}
-
 		if(pfd[2].revents) {
 			len = read(esock, buf, sizeof(buf));
-			if(len <= 0) {
-				fprintf(stderr, "%s: Error while reading from stderr socket: %s\n", argv[0], strerror(errno));
-				return 1;
-			}
-			safewrite(2, buf, len);
+			if(len <= 0)
+				break;
+			if(safewrite(2, buf, len) == -1)
+				break;
 			pfd[2].revents = 0;
 		}
 
 		if(pfd[1].revents) {
 			len = read(sock, buf, sizeof(buf));
-			if(len <= 0) {
-				fprintf(stderr, "%s: Error while reading from stdout socket: %s\n", argv[0], strerror(errno));
-				return 1;
-			}
-			safewrite(1, buf, len);
+			if(len <= 0)
+				break;
+			if(safewrite(1, buf, len) == -1)
+				break;
 			pfd[1].revents = 0;
+		}
+
+		if(pfd[0].revents) {
+			len = read(0, buf, sizeof(buf));
+			if(len <= 0)
+				break;
+			if(safewrite(sock, buf, len) == -1)
+				break;
+			pfd[0].revents = 0;
 		}
 	}
 		
+	if(errno) {
+		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
+		return 1;
+	}
+	
+	close(sock);
+	close(esock);
+	
 	return 0;
 }
