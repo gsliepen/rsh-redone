@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 	
 	struct pollfd pfd[2];
 	
-	int sigmask;
+	int oldmask;
 	
 	argv0 = argv[0];
 	
@@ -357,22 +357,20 @@ int main(int argc, char **argv) {
 			pfd[1].revents = 0;
 		}
 
-		/* Block SIGWINCH so writes don't interfere with eachother */
-		
-		sigmask = sigblock(sigmask(SIGWINCH));
-
 		if(pfd[0].revents) {
+			/* Block SIGWINCH so writes don't interfere with eachother */
+
+			oldmask = sigblock(sigmask(SIGWINCH));
+
 			len = read(0, buf, sizeof(buf));
 			if(len <= 0)
 				break;
 			if(safewrite(sock, buf, len) == -1)
 				break;
-			pfd[0].revents = 0;
+				pfd[0].revents = 0;
+
+			sigsetmask(oldmask);
 		}
-		
-		/* Unblock SIGWINCH */
-		
-		sigsetmask(sigmask);
 	}
 
 	/* Clean up */
