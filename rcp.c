@@ -67,7 +67,7 @@ int safewritev(int fd, struct iovec *v, size_t count) {
 			if(errno == EINTR)
 				continue;
 			else
-				return result;
+				return r;
 		}
 
 		for(;;) {
@@ -111,7 +111,7 @@ ssize_t saferead(int fd, void *buf, size_t count) {
  */
 
 typedef struct ring_t {
-	unsigned char *buf;
+	char *buf;
 	size_t len;
 	size_t fill;
 	off_t off;
@@ -174,7 +174,7 @@ ssize_t ringwrite(ring_t *ring, int fd, size_t count) {
 	return safewritev(fd, io, 2);
 }
 
-void *ringchr(ring_t *ring, int c, size_t extra) {
+void *ringchr(ring_t *ring, char c, size_t extra) {
 	off_t off = ring->off;
 	size_t fill = ring->fill;
 
@@ -197,7 +197,7 @@ void *ringchr(ring_t *ring, int c, size_t extra) {
 	return NULL;
 }
 
-ssize_t ringdist(ring_t *ring, unsigned char *s) {
+ssize_t ringdist(ring_t *ring, char *s) {
 	ssize_t r;
 	r = s - (ring->buf + ring->off);
 	if(r < 0)
@@ -231,6 +231,8 @@ ssize_t mmapcopy(int fd, ssize_t written, ssize_t size) {
 			return -1;
 		written += chunk;
 	}
+
+	return written;
 }
 
 #if 0
@@ -515,11 +517,11 @@ int to(char *dname, int preserve, int dir) {
 #endif
 
 int to(char *dname, int preserve, int dir) {
-	unsigned char buf[65536];
+	char buf[65536];
 	char path[4096];
 	ssize_t size, r, offs, part, slash[128];
 	int flags, mode, i, level, fd;
-	unsigned char cmd, c, *s;
+	char cmd, c, *s;
 	struct stat st;
 	struct ring_t ring;
 
@@ -661,7 +663,8 @@ int to(char *dname, int preserve, int dir) {
 				}
 				break;
 			default:
-				return EPROTO, -1;
+				errno = EPROTO;
+				return -1;
 		}
 	}
 }
