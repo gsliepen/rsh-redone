@@ -362,7 +362,8 @@ int main(int argc, char **argv) {
 		if(FD_ISSET(0, &infd)) {
 			len[0] = read(0, buf[0], BUFLEN);
 			if(len[0] <= 0) {
-				break;
+				FD_CLR(0, &infdset);
+				shutdown(sock, SHUT_WR);
 			} else {
 				FD_SET(sock, &outfdset);
 				FD_CLR(0, &infdset);
