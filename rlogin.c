@@ -35,7 +35,6 @@
 #define BUFLEN 0x10000
 
 char *argv0;
-int sock = -1, winchsupport = 0;
 
 void usage(void) {
 	fprintf(stderr, "Usage: rlogin [-l user] [-p port] host\n");
@@ -114,6 +113,8 @@ int main(int argc, char **argv) {
 	int err, i;
 	
 	char opt;
+
+    int sock = -1, winchsupport = 0;
 
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
