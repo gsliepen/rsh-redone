@@ -1,5 +1,5 @@
 /*
-    rlogind.c - remote login server
+    rshd.c - remote shell server
     Copyright (C) 2003  Guus Sliepen <guus@sliepen.eu.org>
 
     This program is free software; you can redistribute it and/or modify
