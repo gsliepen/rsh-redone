@@ -52,6 +52,20 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 	return written;
 }
 
+/* Safe and fast string building */
+
+void safecpy(char **dest, int *len, char *source, int terminate) {
+	while(*source && *len) {
+		*(*dest)++ = *source++;
+		(*len)--;
+	}
+
+	if(terminate && *len) {
+		*(*dest)++ = 0;
+		(*len)--;
+	}
+}
+
 int main(int argc, char **argv) {
 	char *user = NULL;
 	char *luser = NULL;
@@ -244,16 +258,22 @@ int main(int argc, char **argv) {
 	/* Send required information to the server */
 	
 	bufp[0] = buf[0];
-	strcpy(bufp[0], lport); bufp[0] += strlen(lport) + 1;
-	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
-	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
+	len[0] = sizeof(buf[0]);
+	safecpy(&bufp[0], &len[0], lport, 1);
+	safecpy(&bufp[0], &len[0], luser, 1);
+	safecpy(&bufp[0], &len[0], user, 1);
 
 	for(; optind < argc; optind++) {
-		strcpy(bufp[0], argv[optind]); bufp[0] += strlen(argv[optind]);
+		safecpy(&bufp[0], &len[0], argv[optind], 0);
 		if(optind < argc - 1)
-			*bufp[0]++ = ' ';
+			safecpy(&bufp[0], &len[0], " ", 0);
 	}
-	*bufp[0]++ = 0;
+	safecpy(&bufp[0], &len[0], "", 1);
+	
+	if(!len[0]) {
+		fprintf(stderr, "%s: Arguments too long!\n", argv0);
+		return 1;
+	}
 	
 	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
@@ -315,7 +335,7 @@ int main(int argc, char **argv) {
 			len[2] = read(esock, buf[2], BUFLEN);
 			if(len[2] <= 0) {
 				if(errno != EINTR) {
-					if(FD_ISSET(sock, &infdset))
+					if(FD_ISSET(sock, &infdset) || FD_ISSET(1, &outfdset))
 						FD_CLR(esock, &infdset);
 					else
 						break;
@@ -330,7 +350,7 @@ int main(int argc, char **argv) {
 			wlen = write(2, bufp[2], len[2]);
 			if(wlen <= 0) {
 				if(errno != EINTR) {
-					if(FD_ISSET(sock, &infdset))
+					if(FD_ISSET(sock, &infdset) || FD_ISSET(1, &outfdset))
 						FD_CLR(esock, &infdset);
 					else
 						break;
@@ -350,7 +370,7 @@ int main(int argc, char **argv) {
 			len[1] = read(sock, buf[1], BUFLEN);
 			if(len[1] <= 0) {
 				if(errno != EINTR) {
-					if(FD_ISSET(esock, &infdset))
+					if(FD_ISSET(esock, &infdset) || FD_ISSET(2, &outfdset))
 						FD_CLR(sock, &infdset);
 					else
 						break;
@@ -365,7 +385,7 @@ int main(int argc, char **argv) {
 			wlen = write(1, bufp[1], len[1]);
 			if(wlen <= 0) {
 				if(errno != EINTR) {
-					if(FD_ISSET(esock, &infdset))
+					if(FD_ISSET(esock, &infdset) || FD_ISSET(2, &outfdset))
 						FD_CLR(sock, &infdset);
 					else
 						break;

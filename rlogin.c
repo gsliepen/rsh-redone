@@ -61,6 +61,20 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 	return written;
 }
 
+/* Safe and fast string building */
+
+void safecpy(char **dest, int *len, char *source, int terminate) {
+	while(*source && *len) {
+		*(*dest)++ = *source++;
+		(*len)--;
+	}
+
+	if(terminate && *len) {
+		*(*dest)++ = 0;
+		(*len)--;
+	}
+}
+
 /* Convert termios speed to a string */
 
 char *termspeed(speed_t speed) {
@@ -269,17 +283,24 @@ int main(int argc, char **argv) {
 	speed = termspeed(cfgetispeed(&tios));
 	
 	bufp[0] = buf[0];
-	*bufp[0]++ = 0;
-	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
-	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
-	strcpy(bufp[0], term); bufp[0] += strlen(term);
-	*bufp[0]++ = '/';
-	strcpy(bufp[0], speed); bufp[0] += strlen(speed);
+	len[0] = sizeof(buf[0]);
+	safecpy(&bufp[0], &len[0], "", 1);
+	safecpy(&bufp[0], &len[0], luser, 1);
+	safecpy(&bufp[0], &len[0], user, 1);
+	safecpy(&bufp[0], &len[0], term, 0);
+	safecpy(&bufp[0], &len[0], "/", 0);
+	safecpy(&bufp[0], &len[0], speed, 0);
+
 	for(; optind < argc; optind++) {
-		*bufp[0]++ = ' ';
-		strcpy(bufp[0], argv[optind]); bufp[0] += strlen(argv[optind]);
+		safecpy(&bufp[0], &len[0], "/", 0);
+		safecpy(&bufp[0], &len[0], argv[optind], 0);
 	}
-	*bufp[0]++ = 0;
+	safecpy(&bufp[0], &len[0], "", 1);
+
+	if(!len[0]) {
+		fprintf(stderr, "%s: Arguments too long!\n", argv0);
+		return 1;
+	}
 	
 	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
