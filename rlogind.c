@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
 	int i;
 	
 	int master, slave;
-	char *tty;
+	char *tty, *ttylast;
 
 	pam_handle_t *handle;		
 	struct pam_conv conv = {conv_h, NULL};
@@ -381,9 +381,7 @@ int main(int argc, char **argv) {
 	/* Authentication succeeded */
 	
 	pam_end(handle, PAM_SUCCESS);
-	
-	/* spawn login shell */
-	
+
 	if((pid = fork()) < 0) {
 		syslog(LOG_ERR, "fork() failed: %m");
 		return 1;
@@ -461,12 +459,17 @@ int main(int argc, char **argv) {
 		
 		if(errno) {
 			syslog(LOG_NOTICE, "Closing connection with %s@%s: %m", user, host);
-			return 1;
+			err = 1;
 		} else {
 			syslog(LOG_NOTICE, "Closing connection with %s@%s", user, host);
-			return 0;
+			err = 0;
 		}
 		
+		ttylast = tty + 5;
+
+		if(logout(ttylast))
+			logwtmp(ttylast, "", "");
+			
 		close(master);
 	} else {
 		/* Child process, will become the shell */
@@ -507,4 +510,6 @@ int main(int argc, char **argv) {
 		syslog(LOG_ERR, "Failed to spawn login process: %m");
 		return 1;
 	}
+
+	return err;
 }
