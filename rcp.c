@@ -374,7 +374,7 @@ int send_dir(int out, char *name, struct stat stat, int preserve) {
 	if(!dir)
 		return -1;
 	
-	while((ent = readdir(dir)) {
+	while((ent = readdir(dir))) {
 		if(!ent>d_ino)
 			continue;
 		if(!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
