@@ -42,8 +42,12 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 	
 	while(count) {
 		result = write(fd, buf, count);
-		if(result == -1)
-			return result;
+		if(result == -1) {
+			if(errno == EINTR)
+				continue;
+			else
+				return result;
+		}
 		written += result;
 		buf += result;
 		count -= result;

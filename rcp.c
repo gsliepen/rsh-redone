@@ -1,6 +1,7 @@
 /*
     rcp.c - remote file copy program
-    Copyright (C) 2003  Guus Sliepen <guus@sliepen.eu.org>
+    Copyright (C) 2003  Guus Sliepen <guus@sliepen.eu.org>,
+                        Wessel Dankers <wsl@fruit.eu.org>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License version 2 as published
@@ -43,8 +44,12 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 	
 	while(count) {
 		result = write(fd, buf, count);
-		if(result == -1)
-			return result;
+		if(result == -1) {
+			if(errno == EINTR)
+				continue;
+			else
+				return result;
+		}
 		written += result;
 		buf += result;
 		count -= result;
@@ -58,8 +63,12 @@ int safewritev(int fd, struct iovec *v, size_t count) {
 
 	while(count > 0) {
 		r = writev(fd, v, count);
-		if(r == -1)
-			return -1;
+		if(r == -1) {
+			if(errno == EINTR)
+				continue;
+			else
+				return result;
+		}
 
 		for(;;) {
 			e = v->iov_len;
@@ -82,8 +91,12 @@ ssize_t saferead(int fd, void *buf, size_t count) {
 	
 	while(count) {
 		result = read(fd, buf, count);
-		if(result == -1)
-			return result;
+		if(result == -1) {
+			if(errno == EINTR)
+				continue;
+			else
+				return result;
+		}
 		written += result;
 		buf += result;
 		count -= result;
