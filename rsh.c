@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 	char hostaddr[NI_MAXHOST];
 	char portnr[NI_MAXSERV];
 
-	char *buf[3], *bufp[3];
+	char buf[65536][3], *bufp[3];
 	int len[3], wlen;
 	
 	fd_set infd, outfd, infdset, outfdset, errfd;
@@ -254,7 +254,7 @@ int main(int argc, char **argv) {
 	
 	errno = 0;
 	
-	if(read(sock, buf, 1) != 1 || *buf) {
+	if(read(sock, buf[0], 1) != 1 || *buf[0]) {
 		fprintf(stderr, "%s: Didn't receive NULL byte from server: %s\n", argv0, strerror(errno));
 		return 1;
 	}
@@ -270,13 +270,9 @@ int main(int argc, char **argv) {
 	
 	/* Process input/output */
 
-	for(i = 0; i < 3; i++) {
-		bufp[i] = buf[i] = malloc(BUFLEN);
-		if(!buf[i]) {
-			fprintf(stderr, "%s: Could not allocate buffers: %s\n", argv0, strerror(errno));
-			return 1;
-		}
-	}
+	bufp[0] = buf[0];
+	bufp[1] = buf[1];
+	bufp[2] = buf[2];
 	
 	FD_ZERO(&infdset);
 	FD_ZERO(&outfdset);
@@ -292,10 +288,8 @@ int main(int argc, char **argv) {
 		outfd = outfdset;
 		errfd = infdset;
 	
-		if(select(maxfd, &infd, &outfd, &errfd, NULL) == 0) {
-			fprintf(stderr, "%s: Error while doing select(): %s\n", argv0, strerror(errno));
-			return 1;
-		}
+		if(select(maxfd, &infd, &outfd, &errfd, NULL) == 0)
+			break;
 
 		if(FD_ISSET(esock, &infd)) {
 			len[2] = read(esock, buf[2], BUFLEN);
