@@ -1,6 +1,7 @@
 PROGRAMS = rlogin rlogind rsh
 
 CC ?= gcc
+CFLAGS ?= -Wall -g
 PREFIX ?= /usr
 INSTALL ?= install
 BINDIR = $(PREFIX)/bin
