@@ -130,6 +130,7 @@ int main(int argc, char **argv) {
 	struct pollfd pfd[3];
 	
 	struct winsize winsize;
+	int winchsupport = 0;
 	
 	/* Lookup local username */
 	
@@ -288,11 +289,6 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if(write(winchpipe[1], "", 1) <= 0){
-		fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
-		return 1;
-	}
-					
 	/* Set up terminal on the client */
 	
 	oldtios = tios;
@@ -319,7 +315,7 @@ int main(int argc, char **argv) {
 	pfd[0].fd = 0;
 	pfd[0].events = POLLIN | POLLERR | POLLHUP;
 	pfd[1].fd = sock;
-	pfd[1].events = POLLIN | POLLERR | POLLHUP;
+	pfd[1].events = POLLIN | POLLERR | POLLHUP | POLLPRI;
 	pfd[2].fd = winchpipe[0];
 	pfd[2].events = POLLIN | POLLERR | POLLHUP;
 
@@ -342,12 +338,26 @@ int main(int argc, char **argv) {
 		}
 
 		if(pfd[1].revents) {
-			len = read(sock, buf, sizeof(buf));
-			if(len <= 0)
-				break;
-			if(safewrite(1, buf, len) <= 0)
-				break;
-			pfd[1].revents = 0;
+			if(pfd[1].revents & POLLPRI) {
+				len = recv(sock, buf, 1, MSG_OOB);
+				if(len <= 0)
+					break;
+				if(*buf == (char)0x80) {
+					winchsupport = 1;
+					if(write(winchpipe[1], "", 1) <= 0){
+						fprintf(stderr, "%s: write() failed: %s\n", argv[0], strerror(errno));
+						return 1;
+					}
+				}
+			}
+			if(pfd[1].revents & ~POLLPRI) {
+				len = read(sock, buf, sizeof(buf));
+				if(len <= 0)
+					break;
+				if(safewrite(1, buf, len) <= 0)
+					break;
+				pfd[1].revents = 0;
+			}
 		}
 
 		/* If we got a SIGWINCH, send new window size to server */
@@ -357,17 +367,19 @@ int main(int argc, char **argv) {
 			if(len <= 0)
 				break;
 			
-			buf[0] = buf[1] = (char)0xFF;
-			buf[2] = buf[3] = 's';
-			
-			ioctl(0, TIOCGWINSZ, &winsize);
-			*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
-			*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
-			*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
-			*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
-			
-			if(safewrite(sock, buf, 12) <= 0)
-				break;
+			if(winchsupport) {
+				buf[0] = buf[1] = (char)0xFF;
+				buf[2] = buf[3] = 's';
+
+				ioctl(0, TIOCGWINSZ, &winsize);
+				*(uint16_t *)(buf + 4) = htons(winsize.ws_row);
+				*(uint16_t *)(buf + 6) = htons(winsize.ws_col);
+				*(uint16_t *)(buf + 8) = htons(winsize.ws_xpixel);
+				*(uint16_t *)(buf + 10) = htons(winsize.ws_ypixel);
+
+				if(safewrite(sock, buf, 12) <= 0)
+					break;
+			}
 
 			pfd[1].revents = 0;
 		}
