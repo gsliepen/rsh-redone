@@ -397,7 +397,8 @@ int main(int argc, char **argv) {
 		if(FD_ISSET(sock, &infd)) {
 			len[1] = read(sock, buf[1], BUFLEN);
 			if(len[1] <= 0) {
-				break;
+				if(errno != EINTR)
+					break;
 			} else {
 				FD_SET(1, &outfdset);
 				FD_CLR(sock, &infdset);
@@ -407,7 +408,8 @@ int main(int argc, char **argv) {
 		if(FD_ISSET(1, &outfd)) {
 			wlen = write(1, bufp[1], len[1]);
 			if(wlen <= 0) {
-				break;
+				if(errno != EINTR)
+					break;
 			} else {
 				len[1] -= wlen;
 				bufp[1] += wlen;
@@ -422,8 +424,10 @@ int main(int argc, char **argv) {
 		if(FD_ISSET(0, &infd)) {
 			len[0] = read(0, buf[0], BUFLEN);
 			if(len[0] <= 0) {
-				FD_CLR(0, &infdset);
-				shutdown(sock, SHUT_WR);
+				if(errno != EINTR) {
+					FD_CLR(0, &infdset);
+					shutdown(sock, SHUT_WR);
+				}
 			} else {
 				FD_SET(sock, &outfdset);
 				FD_CLR(0, &infdset);
@@ -433,6 +437,7 @@ int main(int argc, char **argv) {
 		if(FD_ISSET(sock, &outfd)) {
 			wlen = write(sock, bufp[0], len[0]);
 			if(wlen <= 0) {
+				if(errno != EINTR)
 					break;
 			} else {
 				len[0] -= wlen;
