@@ -244,7 +244,6 @@ int main(int argc, char **argv) {
 	/* Send required information to the server */
 	
 	bufp[0] = buf[0];
-	*bufp[0]++ = '\0';
 	strcpy(bufp[0], lport); bufp[0] += strlen(lport) + 1;
 	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
 	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
@@ -254,7 +253,7 @@ int main(int argc, char **argv) {
 		if(optind < argc - 1)
 			*bufp[0]++ = ' ';
 	}
-	*bufp[0]++ = '0';
+	*bufp[0]++ = 0;
 	
 	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));

@@ -269,7 +269,6 @@ int main(int argc, char **argv) {
 	speed = termspeed(cfgetispeed(&tios));
 	
 	bufp[0] = buf[0];
-	*bufp[0]++ = '\0';
 	strcpy(bufp[0], luser); bufp[0] += strlen(luser) + 1;
 	strcpy(bufp[0], user); bufp[0] += strlen(user) + 1;
 	strcpy(bufp[0], term); bufp[0] += strlen(term);
@@ -279,7 +278,7 @@ int main(int argc, char **argv) {
 		*bufp[0]++ = ' ';
 		strcpy(bufp[0], argv[optind]); bufp[0] += strlen(argv[optind]);
 	}
-	*bufp[0]++ = '\0';
+	*bufp[0]++ = 0;
 	
 	if(safewrite(sock, buf[0], bufp[0] - buf[0]) == -1) {
 		fprintf(stderr, "%s: Unable to send required information: %s\n", argv0, strerror(errno));
