@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
-		esock = socket(peer->sa_family, SOCK_STREAM, IPPROTO_TCP);
+		esock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 		
 		if(esock == -1) {
 			syslog(LOG_ERR, "socket() failed: %m");
