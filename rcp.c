@@ -663,8 +663,7 @@ int to(char *dname, int preserve, int dir) {
 				}
 				break;
 			default:
-				errno = EPROTO;
-				return -1;
+				return errno = EPROTO, -1;
 		}
 	}
 }
