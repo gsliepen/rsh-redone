@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
 	int af = AF_UNSPEC;
 	struct addrinfo hint, *ai, *aip, *lai;
 	struct sockaddr raddr;
-	int raddrlen;
+	socklen_t raddrlen;
 	int err, sock = -1, lsock = -1, esock = -1, i;
 	
 	int opt;
