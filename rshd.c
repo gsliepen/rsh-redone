@@ -75,7 +75,7 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 int main(int argc, char **argv) {
 	struct sockaddr_storage peer_sa;
 	struct sockaddr *peer = (struct sockaddr *)&peer_sa;
-	int peerlen = sizeof peer_sa;
+	socklen_t peerlen = sizeof peer_sa;
 	
 	char user[1024];
 	char luser[1024];
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if((err = getnameinfo(peer, peerlen, addr, sizeof addr, port, sizeof port, 0))) {
+	if((err = getnameinfo(peer, peerlen, addr, sizeof addr, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV))) {
 		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
 		return 1;
 	}

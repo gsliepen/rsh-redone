@@ -166,13 +166,13 @@ int conv_h(int msgc, const struct pam_message **msgv, struct pam_response **res,
 int main(int argc, char **argv) {
 	struct sockaddr_storage peer_sa;
 	struct sockaddr *peer = (struct sockaddr *)&peer_sa;
-	int peerlen = sizeof peer_sa;
+	socklen_t peerlen = sizeof peer_sa;
 	
 	char user[1024];
 	char luser[1024];
 	char term[1024];
 		
-	int port;
+	int portnr;
 	
 	struct passwd *pw;
 	
@@ -181,6 +181,8 @@ int main(int argc, char **argv) {
 	int opt;
 
 	char host[NI_MAXHOST];
+	char addr[NI_MAXHOST];
+	char port[NI_MAXSERV];
 	
 	char buf[4096];
 	int len;
@@ -241,22 +243,17 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+	if((err = getnameinfo(peer, peerlen, addr, sizeof addr, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV))) {
+		syslog(LOG_ERR, "Error resolving address: %s", gai_strerror(err));
+		return 1;
+	}
+	
 	/* Check if connection comes from a privileged port */
 	
-	switch(peer->sa_family) {
-		case AF_INET:
-			port = ntohs(((struct sockaddr_in *)peer)->sin_port);
-			break;
-		case AF_INET6:
-			port = ntohs(((struct sockaddr_in6 *)peer)->sin6_port);
-			break;
-		default:
-			port = -1;
-			break;
-	}
-
-	if(port != -1 && (port < 512 || port >= 1024)) {
-		syslog(LOG_ERR, "Connection from %s on illegal port %d.", host, port);
+	portnr = atoi(port);
+	
+	if(portnr < 512 || portnr >= 1024) {
+		syslog(LOG_ERR, "Connection from %s on illegal port %d.", host, portnr);
 		return 1;
 	}
 	
