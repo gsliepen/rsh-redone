@@ -154,8 +154,6 @@ int main(int argc, char **argv) {
 	
 	int flags;
 	
-	int oldmask;
-	
 	argv0 = argv[0];
 	
 	/* Lookup local username */
@@ -367,8 +365,23 @@ int main(int argc, char **argv) {
 	FD_SET(sock, &exfdset);
 
 	/* Handle SIGWINCH */
+
+	int winchpipe[2];
+
+	if(pipe(winchpipe)) {
+		fprintf(stderr, "%s: pipe() failed: %s\n", argv0, strerror(errno));
+		return 1;
+	}
+
+	FD_SET(winchpipe[0], &infdset);
+	if(winchpipe[0] >= maxfd)
+		maxfd = winchpipe[0] + 1;
 	
 	void sigwinch_h(int signal) {
+		write(winchpipe[1], "", 1);
+	}
+
+	void winch() {
 		char wbuf[12];
 		struct winsize winsize;
 
@@ -412,7 +425,7 @@ int main(int argc, char **argv) {
 				break;
 		}
 
-		oldmask = sigblock(sigmask(SIGWINCH));
+		/* Handle window size changes */
 		
 		if(FD_ISSET(sock, &exfd)) {
 			len[1] = recv(sock, buf[1], 1, MSG_OOB);
@@ -421,10 +434,18 @@ int main(int argc, char **argv) {
 			} else {
 				if(*buf[1] == (char)0x80) {
 					winchsupport = true;
-					sigwinch_h(SIGWINCH);
+					winch();
 				}
 			}
 		}
+
+		if(FD_ISSET(winchpipe[0], &infd)) {
+			char dummy;
+			read(winchpipe[0], &dummy, 1);
+			winch();
+		}
+
+		/* Read from socket, blocking more socket input until everything is written to stdout */
 
 		if(FD_ISSET(sock, &infd)) {
 			len[1] = read(sock, buf[1], BUFLEN);
@@ -436,6 +457,8 @@ int main(int argc, char **argv) {
 				FD_CLR(sock, &infdset);
 			}
 		}
+
+		/* Write to stdout, unblocking socket input once everything is written */
 
 		if(FD_ISSET(1, &outfd)) {
 			wlen = write(1, bufp[1], len[1]);
@@ -453,18 +476,24 @@ int main(int argc, char **argv) {
 			}
 		}
 
+		/* Read from stdin, blocking more stdin input until everything is written to socket */
+
 		if(FD_ISSET(0, &infd)) {
 			len[0] = read(0, buf[0], BUFLEN);
 			if(len[0] <= 0) {
 				if(errno != EINTR) {
 					FD_CLR(0, &infdset);
+					FD_CLR(winchpipe[0], &infdset);
 					shutdown(sock, SHUT_WR);
 				}
 			} else {
 				FD_SET(sock, &outfdset);
 				FD_CLR(0, &infdset);
+				FD_CLR(winchpipe[0], &infdset);
 			}
 		}
+
+		/* Write to socket, unblocking stdin input once everything is written */
 
 		if(FD_ISSET(sock, &outfd)) {
 			wlen = write(sock, bufp[0], len[0]);
@@ -477,12 +506,11 @@ int main(int argc, char **argv) {
 				if(!len[0]) {
 					FD_CLR(sock, &outfdset);
 					FD_SET(0, &infdset);
+					FD_SET(winchpipe[0], &infdset);
 					bufp[0] = buf[0];
 				}
 			}
 		}
-
-		sigsetmask(oldmask);
 	}
 
 	/* Clean up */
@@ -493,6 +521,8 @@ int main(int argc, char **argv) {
 	tcsetattr(0, TCSADRAIN, &oldtios);
 	
 	close(sock);
+	close(winchpipe[0]);
+	close(winchpipe[1]);
 
 	return 0;
 }
