@@ -10,7 +10,6 @@
 .Op Fl p Ar port
 .Op Ar user Ns Li @ Ns
 .Ar host
-.Op Ar command
 .Sh DESCRIPTION
 .Nm
 makes a connection to the remote login daemon running on
@@ -21,19 +20,6 @@ output on the remote machine is sent back to the
 .Nm
 client on the local machine,
 the user has a full controlling terminal on the remote host.
-.Pp
-Without a
-.Ar command ,
-the users login shell will be presented.
-If a
-.Ar command
-is present, it will be passed on to the
-.Nm rlogind
-on the remote host.
-It will be executed in the same way as with
-.Nm rsh .
-This is a non-standard extension that may not work with other versions of
-.Nm rlogind !
 .Sh OPTIONS
 .Bl -tag -width flag
 .It Fl 4
