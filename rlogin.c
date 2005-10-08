@@ -126,6 +126,7 @@ int main(int argc, char **argv) {
 	char *port = "login";
 	char *p;
 	char lport[5];
+	static const int one = 1;
 	
 	struct passwd *pw;
 	
@@ -230,6 +231,8 @@ int main(int argc, char **argv) {
 			if(verbose) fprintf(stderr, " Could not open socket: %s\n", strerror(errno));
 			continue;
 		}
+
+        	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 
 		hint.ai_family = aip->ai_family;
 

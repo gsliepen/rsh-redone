@@ -76,6 +76,7 @@ int main(int argc, char **argv) {
 	struct sockaddr_storage peer_sa;
 	struct sockaddr *peer = (struct sockaddr *)&peer_sa;
 	socklen_t peerlen = sizeof peer_sa;
+	static const int one = 1;
 	
 	char user[1024];
 	char luser[1024];
@@ -187,6 +188,8 @@ int main(int argc, char **argv) {
 			syslog(LOG_ERR, "socket() failed: %m");
 			return 1;
 		}
+
+        	setsockopt(esock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 		
 		hint.ai_flags = AI_PASSIVE;
 		

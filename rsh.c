@@ -78,13 +78,12 @@ int main(int argc, char **argv) {
 	char *port = "shell";
 	char *p;
 	char lport[5];
+	static const int one = 1;
 	
 	struct passwd *pw;
 	
 	int af = AF_UNSPEC;
 	struct addrinfo hint, *ai, *aip, *lai;
-	struct sockaddr raddr;
-	socklen_t raddrlen;
 	int err, sock = -1, lsock = -1, esock = -1, i;
 	
 	int opt;
@@ -179,6 +178,8 @@ int main(int argc, char **argv) {
 			continue;
 		}
 
+        	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
 		hint.ai_family = aip->ai_family;
 
 		/* Bind to a privileged port */
@@ -226,6 +227,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+        setsockopt(lsock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
 	hint.ai_family = aip->ai_family;
 	
 	freeaddrinfo(ai);
@@ -253,7 +256,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if(listen(lsock, 1)) {
+	if(listen(lsock, 10)) {
 		fprintf(stderr, "%s: Could not listen: %s\n", argv0, strerror(errno));
 		return 1;
 	}
@@ -301,7 +304,7 @@ int main(int argc, char **argv) {
 
 	/* Wait for incoming connection from server */
 	
-	if((esock = accept(lsock, &raddr, &raddrlen)) == -1) {
+	if((esock = accept(lsock, NULL, 0)) == -1) {
 		fprintf(stderr, "%s: Could not accept stderr connection: %s\n", argv0, strerror(errno));
 		return 1;
 	}
