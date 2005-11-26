@@ -35,15 +35,15 @@
 
 #define BUFLEN 0x10000
 
-char *argv0;
+static char *argv0;
 
-void usage(void) {
+static void usage(void) {
 	fprintf(stderr, "Usage: rlogin [-46v] [-l user] [-p port] [user@]host\n");
 }
 
 /* Make sure everything gets written */
 
-ssize_t safewrite(int fd, const void *buf, size_t count) {
+static ssize_t safewrite(int fd, const void *buf, size_t count) {
 	int written = 0, result;
 	
 	while(count) {
@@ -64,7 +64,7 @@ ssize_t safewrite(int fd, const void *buf, size_t count) {
 
 /* Safe and fast string building */
 
-void safecpy(char **dest, int *len, char *source, bool terminate) {
+static void safecpy(char **dest, int *len, const char *source, bool terminate) {
 	while(*source && *len) {
 		*(*dest)++ = *source++;
 		(*len)--;
@@ -78,7 +78,7 @@ void safecpy(char **dest, int *len, char *source, bool terminate) {
 
 /* Convert termios speed to a string */
 
-char *termspeed(speed_t speed) {
+static char *termspeed(speed_t speed) {
 	switch(speed) {
 		case B0: return "0";
 		case B50: return "50";
