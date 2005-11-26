@@ -28,6 +28,7 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 
 #define BUFLEN 0x10000
 
@@ -155,14 +156,22 @@ int main(int argc, char **argv) {
 				return 1;
 		}
 	}
-	
-	if(optind == argc) {
-		fprintf(stderr, "%s: No host specified!\n", argv0);
-		usage();
-		return 1;
+
+	/* if we were called with something else from rsh use the name as host */
+	host = basename(argv0);
+
+	if(!strcmp(host, "rsh") || !strcmp(host, "rsh-redone-rsh"))
+		host = NULL;
+
+	/* get host from the command line */
+	if(!host) {
+		if(optind == argc) {
+			fprintf(stderr, "%s: No host specified!\n", argv0);
+			usage();
+			return 1;
+		}
+		host = argv[optind++];
 	}
-	
-	host = argv[optind++];
 	
 	if((p = strchr(host, '@'))) {
 		user = host;
