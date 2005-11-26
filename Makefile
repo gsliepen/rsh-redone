@@ -38,7 +38,7 @@ install-bin: $(BIN)
 
 install-sbin: $(SBIN)
 	mkdir -p $(DESTDIR)$(SBINDIR)
-	$(INSTALL) rlogind rshd $(DESTDIR)$(SBINDIR)/
+	$(INSTALL) $(SBIN) $(DESTDIR)$(SBINDIR)/
 
 install-man: $(MAN1) $(MAN5) $(MAN8)
 	mkdir -p $(DESTDIR)$(MANDIR)/man1/
