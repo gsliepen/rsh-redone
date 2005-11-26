@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
 	
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:46v")) != -1) {
+	while((opt = getopt(argc, argv, "l:p:46v")) != -1) {
 		switch(opt) {
 			case 'l':
 				user = optarg;
@@ -197,8 +197,14 @@ int main(int argc, char **argv) {
 	}
 	
 	host = argv[optind++];
+
+	if(optind < argc) {
+		fprintf(stderr, "%s: Too many arguments!\n", argv0);
+		usage();
+		return 1;
+	}
 	
-;	if((p = strchr(host, '@'))) {
+	if((p = strchr(host, '@'))) {
 		user = host;
 		*p = '\0';
 		host = p + 1;
