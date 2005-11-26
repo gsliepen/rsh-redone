@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <pwd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -33,7 +34,7 @@
 char *argv0;
 
 void usage(void) {
-	fprintf(stderr, "Usage: %s [-46v] [-l user] [-p port] [user@]host command...\n", argv0);
+	fprintf(stderr, "Usage: %s [-46vn] [-l user] [-p port] [user@]host command...\n", argv0);
 }
 
 /* Make sure everything gets written */
@@ -68,6 +69,22 @@ void safecpy(char **dest, int *len, char *source, bool terminate) {
 	if(terminate && *len) {
 		*(*dest)++ = 0;
 		(*len)--;
+	}
+}
+
+void closestdin(void) {
+	int fd;
+
+	close(0);
+
+	if((fd = open("/dev/null", O_RDONLY)) < 0) {
+		fprintf(stderr, "%s: Error opening /dev/null: %s\n", argv0, strerror(errno));
+		exit(1);
+	}
+
+	if(fd != 0) {
+		dup2(fd, 0);
+		close(fd);
 	}
 }
 
@@ -112,7 +129,7 @@ int main(int argc, char **argv) {
 	
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:46v")) != -1) {
+	while((opt = getopt(argc, argv, "+l:p:46vn")) != -1) {
 		switch(opt) {
 			case 'l':
 				user = optarg;
@@ -128,6 +145,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'v':
 				verbose = true;
+				break;
+			case 'n':
+				closestdin();
 				break;
 			default:
 				fprintf(stderr, "%s: Unknown option!\n", argv0);

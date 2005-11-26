@@ -30,6 +30,10 @@ Use only IPv4 to connect to the remote host.
 Use only IPv6 to connect to the remote host.
 .It Fl v
 Be verbose.
+.It Fl n
+Redirect stdin to
+.Pa /dev/null
+to be able to run rsh in the background.
 .It Fl l Ar user
 Connect to the remote host as a different user than on the local machine.
 .It Fl p Ar port
