@@ -128,10 +128,24 @@ int main(int argc, char **argv) {
 	}
 	user = luser = pw->pw_name;
 	
+	/* if we were called with something else from rsh use the name as host */
+	host = basename(argv0);
+
+	if(!strcmp(host, "rsh") || !strcmp(host, "rsh-redone-rsh"))
+		host = NULL;
+
 	/* Process options */
 			
-	while((opt = getopt(argc, argv, "+l:p:46vn")) != -1) {
+	while((opt = getopt(argc, argv, "-l:p:46vn")) != -1) {
 		switch(opt) {
+			case 1:
+				if(!host) {
+					host = optarg;
+					break;
+				} else {
+					optind--;
+					goto done;
+				}
 			case 'l':
 				user = optarg;
 				break;
@@ -157,20 +171,11 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	/* if we were called with something else from rsh use the name as host */
-	host = basename(argv0);
-
-	if(!strcmp(host, "rsh") || !strcmp(host, "rsh-redone-rsh"))
-		host = NULL;
-
-	/* get host from the command line */
+done:
 	if(!host) {
-		if(optind == argc) {
-			fprintf(stderr, "%s: No host specified!\n", argv0);
-			usage();
-			return 1;
-		}
-		host = argv[optind++];
+		fprintf(stderr, "%s: No host specified!\n", argv0);
+		usage();
+		return 1;
 	}
 	
 	if((p = strchr(host, '@'))) {
