@@ -14,7 +14,7 @@ SHAREDIR ?= $(PREFIX)/share
 SYSCONFDIR ?= $(PREFIX)/etc
 MANDIR ?= $(SHAREDIR)/man
 PAMDIR ?= $(SYSCONFDIR)/pam.d
-CFLAGS ?= -Wall -g -O2 -pipe -DSBINDIR=\"$(SBINDIR)\"
+CFLAGS ?= -Wall -g -O2 -pipe -DBINDIR=\"$(BINDIR)\"
 
 all: $(BIN) $(SBIN)
 

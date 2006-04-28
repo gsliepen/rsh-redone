@@ -32,8 +32,8 @@
 
 #define BUFLEN 0x10000
 
-#ifndef SBINDIR
-#define SBINDIR "/usr/sbin"
+#ifndef BINDIR
+#define BINDIR "/usr/bin"
 #endif
 
 static char *argv0;
@@ -182,8 +182,11 @@ done:
 		return 1;
 	}
 	
-	if(optind == argc)
-		execv(SBINDIR "/rlogin", argv);
+	if(optind == argc) {
+		execv(BINDIR "/rlogin", argv);
+		fprintf(stderr, "%s: Could not execute " BINDIR "/rlogin: %s\n", argv0, strerror(errno));
+		return 1;
+	}
 
 	if((p = strchr(host, '@'))) {
 		user = host;
