@@ -6,7 +6,6 @@ MAN8 = rlogind.8 rshd.8
 PAM = pam/rlogin pam/rsh
 
 CC ?= gcc
-CFLAGS ?= -Wall -g -O2 -pipe
 PREFIX ?= /usr
 INSTALL ?= install
 BINDIR ?= $(PREFIX)/bin
@@ -15,6 +14,7 @@ SHAREDIR ?= $(PREFIX)/share
 SYSCONFDIR ?= $(PREFIX)/etc
 MANDIR ?= $(SHAREDIR)/man
 PAMDIR ?= $(SYSCONFDIR)/pam.d
+CFLAGS ?= -Wall -g -O2 -pipe -DSBINDIR=\"$(SBINDIR)\"
 
 all: $(BIN) $(SBIN)
 

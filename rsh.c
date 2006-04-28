@@ -32,6 +32,10 @@
 
 #define BUFLEN 0x10000
 
+#ifndef SBINDIR
+#define SBINDIR "/usr/sbin"
+#endif
+
 static char *argv0;
 
 static void usage(void) {
@@ -178,6 +182,9 @@ done:
 		return 1;
 	}
 	
+	if(optind == argc)
+		execv(SBINDIR "/rlogin", argv);
+
 	if((p = strchr(host, '@'))) {
 		user = host;
 		*p = '\0';
