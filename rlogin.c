@@ -334,7 +334,9 @@ int main(int argc, char **argv) {
 	/* Set up terminal on the client */
 	
 	oldtios = tios;
+#if defined(ONLCR) && defined(OCRNL)
 	tios.c_oflag &= ~(ONLCR|OCRNL);
+#endif
 	tios.c_lflag &= ~(ECHO|ICANON|ISIG);
 	tios.c_iflag &= ~(ICRNL|ISTRIP|IXON);
 	
