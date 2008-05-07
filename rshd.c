@@ -220,9 +220,12 @@ int main(int argc, char **argv) {
 		
 		freeaddrinfo(ai);
 		
-		if(dup2(esock, 2) == -1) {
-			syslog(LOG_ERR, "dup2() failed: %m");
-			return 1;
+		if(esock != 2) {
+			if(dup2(esock, 2) == -1) {
+				syslog(LOG_ERR, "dup2() failed: %m");
+				return 1;
+			}
+			close(esock);
 		}
 	}
 
