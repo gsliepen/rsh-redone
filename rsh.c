@@ -386,7 +386,7 @@ done:
 		if(FD_ISSET(esock, &infd)) {
 			len[2] = read(esock, buf[2], BUFLEN);
 			if(len[2] <= 0) {
-				if(errno != EINTR) {
+				if(errno != EINTR && errno != EAGAIN) {
 					if(FD_ISSET(sock, &infdset) || FD_ISSET(1, &outfdset))
 						FD_CLR(esock, &infdset);
 					else
@@ -396,12 +396,14 @@ done:
 				FD_SET(2, &outfdset);
 				FD_CLR(esock, &infdset);
 			}
+		} else {
+			len[2] = 0;
 		}
 
 		if(FD_ISSET(2, &outfd)) {
 			wlen = write(2, bufp[2], len[2]);
 			if(wlen <= 0) {
-				if(errno != EINTR) {
+				if(errno != EINTR && errno != EAGAIN) {
 					if(FD_ISSET(sock, &infdset) || FD_ISSET(1, &outfdset))
 						FD_CLR(esock, &infdset);
 					else
@@ -421,7 +423,7 @@ done:
 		if(FD_ISSET(sock, &infd)) {
 			len[1] = read(sock, buf[1], BUFLEN);
 			if(len[1] <= 0) {
-				if(errno != EINTR) {
+				if(errno != EINTR && errno != EAGAIN) {
 					if(FD_ISSET(esock, &infdset) || FD_ISSET(2, &outfdset))
 						FD_CLR(sock, &infdset);
 					else
@@ -436,7 +438,7 @@ done:
 		if(FD_ISSET(1, &outfd)) {
 			wlen = write(1, bufp[1], len[1]);
 			if(wlen <= 0) {
-				if(errno != EINTR) {
+				if(errno != EINTR && errno != EAGAIN) {
 					if(FD_ISSET(esock, &infdset) || FD_ISSET(2, &outfdset))
 						FD_CLR(sock, &infdset);
 					else
@@ -456,7 +458,7 @@ done:
 		if(FD_ISSET(0, &infd)) {
 			len[0] = read(0, buf[0], BUFLEN);
 			if(len[0] <= 0) {
-				if(errno != EINTR) {
+				if(errno != EINTR && errno != EAGAIN) {
 					FD_CLR(0, &infdset);
 					shutdown(sock, SHUT_WR);
 				}
@@ -469,7 +471,7 @@ done:
 		if(FD_ISSET(sock, &outfd)) {
 			wlen = write(sock, bufp[0], len[0]);
 			if(wlen <= 0) {
-				if(errno != EINTR)
+				if(errno != EINTR && errno != EAGAIN)
 					break;
 			} else {
 				len[0] -= wlen;
