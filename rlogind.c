@@ -35,6 +35,7 @@
 #include <pty.h>
 #include <utmp.h>
 #include <grp.h>
+#include <syslog.h>
 
 static char *argv0;
 
