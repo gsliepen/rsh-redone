@@ -22,13 +22,13 @@ rlogin: rlogin.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 in.rlogind: rlogind.c
-	$(CC) $(CFLAGS) -lutil -lpam -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< -lutil -lpam
 
 rsh: rsh.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 in.rshd: rshd.c
-	$(CC) $(CFLAGS) -lpam -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< -lpam
 
 install: install-bin install-sbin install-man install-pam
 
